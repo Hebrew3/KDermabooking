@@ -172,6 +172,7 @@
                                             class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
                                         <option value="">Select unit</option>
                                         <option value="mL" {{ old('content_unit') == 'mL' ? 'selected' : '' }}>mL</option>
+                                        <option value="g" {{ old('content_unit') == 'g' ? 'selected' : '' }}>g</option>
                                         <option value="pc" {{ old('content_unit') == 'pc' ? 'selected' : '' }}>pc</option>
                                     </select>
                                     @error('content_unit')
