@@ -49,19 +49,55 @@
 
                                 <div class="flex items-center space-x-2">
                                     <input type="hidden" name="schedules[{{ $day }}][day_of_week]" value="{{ $day }}">
-                                    <input type="time"
-                                           name="schedules[{{ $day }}][start_time]"
-                                           value="{{ $schedule?->start_time }}"
-                                           id="start-{{ $day }}"
-                                           class="text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                                           {{ !$schedule || !$schedule->is_available ? 'disabled' : '' }}>
+                                    @php
+                                        $startTimeFormatted = '';
+                                        $endTimeFormatted = '';
+                                        if ($schedule && $schedule->start_time) {
+                                            try {
+                                                $startTimeFormatted = \Carbon\Carbon::createFromFormat(
+                                                    strlen($schedule->start_time) > 5 ? 'H:i:s' : 'H:i',
+                                                    $schedule->start_time
+                                                )->format('H:i');
+                                            } catch (\Exception $e) {
+                                                $startTimeFormatted = substr($schedule->start_time, 0, 5);
+                                            }
+                                        }
+                                        if ($schedule && $schedule->end_time) {
+                                            try {
+                                                $endTimeFormatted = \Carbon\Carbon::createFromFormat(
+                                                    strlen($schedule->end_time) > 5 ? 'H:i:s' : 'H:i',
+                                                    $schedule->end_time
+                                                )->format('H:i');
+                                            } catch (\Exception $e) {
+                                                $endTimeFormatted = substr($schedule->end_time, 0, 5);
+                                            }
+                                        }
+                                    @endphp
+                                    <div class="flex flex-col">
+                                        <input type="time"
+                                               name="schedules[{{ $day }}][start_time]"
+                                               value="{{ $startTimeFormatted }}"
+                                               id="start-{{ $day }}"
+                                               class="text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('schedules.'.$day.'.start_time') border-red-500 @enderror"
+                                               {{ !$schedule || !$schedule->is_available ? 'disabled' : '' }}
+                                               {{ ($schedule && $schedule->is_available) ? 'required' : '' }}>
+                                        @error('schedules.'.$day.'.start_time')
+                                            <span class="text-red-600 text-xs mt-1">{{ $message }}</span>
+                                        @enderror
+                                    </div>
                                     <span class="text-gray-400">to</span>
-                                    <input type="time"
-                                           name="schedules[{{ $day }}][end_time]"
-                                           value="{{ $schedule?->end_time }}"
-                                           id="end-{{ $day }}"
-                                           class="text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                                           {{ !$schedule || !$schedule->is_available ? 'disabled' : '' }}>
+                                    <div class="flex flex-col">
+                                        <input type="time"
+                                               name="schedules[{{ $day }}][end_time]"
+                                               value="{{ $endTimeFormatted }}"
+                                               id="end-{{ $day }}"
+                                               class="text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('schedules.'.$day.'.end_time') border-red-500 @enderror"
+                                               {{ !$schedule || !$schedule->is_available ? 'disabled' : '' }}
+                                               {{ ($schedule && $schedule->is_available) ? 'required' : '' }}>
+                                        @error('schedules.'.$day.'.end_time')
+                                            <span class="text-red-600 text-xs mt-1">{{ $message }}</span>
+                                        @enderror
+                                    </div>
                                 </div>
                             </div>
                         @endforeach
@@ -81,9 +117,35 @@
             const start = document.getElementById('start-' + day);
             const end = document.getElementById('end-' + day);
             if (start && end) {
-                start.disabled = !enabled;
-                end.disabled = !enabled;
+                if (enabled) {
+                    start.disabled = false;
+                    end.disabled = false;
+                    start.setAttribute('required', 'required');
+                    end.setAttribute('required', 'required');
+                    start.classList.remove('bg-gray-100', 'cursor-not-allowed');
+                    end.classList.remove('bg-gray-100', 'cursor-not-allowed');
+                } else {
+                    start.disabled = true;
+                    end.disabled = true;
+                    start.removeAttribute('required');
+                    end.removeAttribute('required');
+                    start.value = '';
+                    end.value = '';
+                    start.classList.add('bg-gray-100', 'cursor-not-allowed');
+                    end.classList.add('bg-gray-100', 'cursor-not-allowed');
+                }
             }
         }
+        
+        // Initialize required attributes on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            daysOfWeek.forEach(function(day) {
+                const checkbox = document.querySelector('input[name="schedules[' + day + '][is_available]"]');
+                if (checkbox && checkbox.checked) {
+                    toggleDayInputs(day, true);
+                }
+            });
+        });
     </script>
 </x-app-layout>

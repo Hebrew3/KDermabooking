@@ -26,6 +26,8 @@
                             @break
                         @case('confirmed')
                             Your appointment is confirmed. Please arrive a few minutes early on the scheduled date and time.
+                            <br><br>
+                            <strong>Important Reminder:</strong> Please note that we can only wait for you for up to <strong>15 minutes</strong> after your scheduled appointment time. If you arrive later than 15 minutes, your appointment may be cancelled or rescheduled. We appreciate your understanding and punctuality.
                             @break
                         @case('in_progress')
                             Your appointment is currently in progress at the clinic.

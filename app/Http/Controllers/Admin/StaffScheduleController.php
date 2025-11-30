@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\StaffSchedule;
 use App\Models\User;
+use App\Models\Appointment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
@@ -82,14 +83,31 @@ class StaffScheduleController extends Controller
         // Custom validation for end_time after start_time
         $validator = Validator::make($request->all(), $rules);
         
-        // Add custom validation for end_time after start_time
+        // Add custom validation for required times when available and end_time after start_time
         $validator->after(function ($validator) use ($request, $daysOfWeek) {
             foreach ($daysOfWeek as $day) {
                 $startTime = $request->input("schedules.{$day}.start_time");
                 $endTime = $request->input("schedules.{$day}.end_time");
                 $isAvailable = $request->input("schedules.{$day}.is_available");
                 
-                // Only validate if both times are provided and day is available
+                // Validate that times are required when day is available
+                if ($isAvailable) {
+                    if (empty($startTime) || trim($startTime) === '') {
+                        $validator->errors()->add(
+                            "schedules.{$day}.start_time",
+                            "The start time is required when {$day} is marked as available."
+                        );
+                    }
+                    
+                    if (empty($endTime) || trim($endTime) === '') {
+                        $validator->errors()->add(
+                            "schedules.{$day}.end_time",
+                            "The end time is required when {$day} is marked as available."
+                        );
+                    }
+                }
+                
+                // Validate that end_time is after start_time when both are provided
                 if ($isAvailable && $startTime && $endTime) {
                     try {
                         $start = Carbon::createFromFormat('H:i', $startTime);
@@ -252,5 +270,151 @@ class StaffScheduleController extends Controller
             'date' => $date,
             'day_of_week' => $dayOfWeek,
         ]);
+    }
+
+    /**
+     * Display staff time slot availability.
+     */
+    public function timeSlotAvailability(Request $request)
+    {
+        $selectedDate = $request->get('date', Carbon::today()->format('Y-m-d'));
+        $selectedStaffId = $request->get('staff_id');
+        
+        $date = Carbon::parse($selectedDate);
+        $dayOfWeek = $date->format('l'); // Monday, Tuesday, etc.
+        
+        // Get all staff
+        $staff = User::whereIn('role', ['nurse', 'aesthetician'])
+            ->orderBy('first_name')
+            ->get();
+        
+        // Get time slot availability for selected date
+        $timeSlotData = [];
+        
+        foreach ($staff as $staffMember) {
+            // Filter by selected staff if provided
+            if ($selectedStaffId && $staffMember->id != $selectedStaffId) {
+                continue;
+            }
+            
+            // Get staff schedule for the day
+            $schedule = StaffSchedule::where('staff_id', $staffMember->id)
+                ->where('day_of_week', $dayOfWeek)
+                ->first();
+            
+            if (!$schedule || !$schedule->is_available || !$schedule->start_time || !$schedule->end_time) {
+                continue; // Skip if staff is not available on this day
+            }
+            
+            // Generate time slots (30-minute intervals)
+            $timeSlots = $this->generateTimeSlots($schedule->start_time, $schedule->end_time);
+            
+            // Get appointments for this staff on this date
+            // Occupied slots: pending, confirmed, in_progress
+            // Available slots: completed, cancelled, no_show, or no appointment
+            $appointments = Appointment::where('staff_id', $staffMember->id)
+                ->whereDate('appointment_date', $date->format('Y-m-d'))
+                ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+                ->with('service')
+                ->get();
+            
+            // Mark slots as occupied based on appointments
+            $slotsWithStatus = [];
+            foreach ($timeSlots as $slot) {
+                $isOccupied = false;
+                $appointment = null;
+                
+                // Parse slot time (already in H:i format from generateTimeSlots)
+                $slotStart = Carbon::createFromFormat('H:i', $slot);
+                $slotEnd = $slotStart->copy()->addMinutes(30);
+                
+                foreach ($appointments as $apt) {
+                    // Normalize appointment time format
+                    $aptTimeStr = strlen($apt->appointment_time) > 5 
+                        ? substr($apt->appointment_time, 0, 5) 
+                        : $apt->appointment_time;
+                    
+                    try {
+                        $aptTime = Carbon::createFromFormat('H:i', $aptTimeStr);
+                    } catch (\Exception $e) {
+                        // Skip this appointment if time format is invalid
+                        continue;
+                    }
+                    
+                    // Get service duration (default to 60 minutes if not available)
+                    $serviceDuration = $apt->service ? ($apt->service->duration ?? 60) : 60;
+                    $aptEnd = $aptTime->copy()->addMinutes($serviceDuration);
+                    
+                    // Check if appointment overlaps with this time slot
+                    // Occupied if: appointment starts before slot ends AND appointment ends after slot starts
+                    if ($aptTime->lt($slotEnd) && $aptEnd->gt($slotStart)) {
+                        $isOccupied = true;
+                        $appointment = $apt;
+                        break; // One appointment per slot is enough
+                    }
+                }
+                
+                $slotsWithStatus[] = [
+                    'time' => $slot,
+                    'status' => $isOccupied ? 'occupied' : 'available',
+                    'appointment' => $appointment,
+                ];
+            }
+            
+            $timeSlotData[] = [
+                'staff' => $staffMember,
+                'schedule' => $schedule,
+                'slots' => $slotsWithStatus,
+            ];
+        }
+        
+        return view('admin.staff-schedule.time-slot-availability', compact(
+            'staff',
+            'timeSlotData',
+            'selectedDate',
+            'selectedStaffId',
+            'date',
+            'dayOfWeek'
+        ));
+    }
+    
+    /**
+     * Generate time slots between start and end time (30-minute intervals).
+     */
+    private function generateTimeSlots(string $startTime, string $endTime): array
+    {
+        $slots = [];
+        
+        // Normalize time format - handle both H:i and H:i:s
+        $startTimeNormalized = strlen($startTime) > 5 ? substr($startTime, 0, 5) : $startTime;
+        $endTimeNormalized = strlen($endTime) > 5 ? substr($endTime, 0, 5) : $endTime;
+        
+        try {
+            $start = Carbon::createFromFormat('H:i', $startTimeNormalized);
+            $end = Carbon::createFromFormat('H:i', $endTimeNormalized);
+        } catch (\Exception $e) {
+            // Fallback: try parsing as H:i:s if H:i fails
+            try {
+                $start = Carbon::createFromFormat('H:i:s', $startTime);
+                $end = Carbon::createFromFormat('H:i:s', $endTime);
+            } catch (\Exception $e2) {
+                // If both fail, return empty array
+                \Log::error('Failed to parse time slots', [
+                    'start_time' => $startTime,
+                    'end_time' => $endTime,
+                    'error' => $e2->getMessage()
+                ]);
+                return [];
+            }
+        }
+        
+        $current = $start->copy();
+        
+        while ($current->lt($end)) {
+            $slots[] = $current->format('H:i');
+            $current->addMinutes(30);
+        }
+        
+        return $slots;
     }
 }

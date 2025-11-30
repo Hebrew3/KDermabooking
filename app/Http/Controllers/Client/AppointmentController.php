@@ -389,6 +389,14 @@ class AppointmentController extends Controller
                 ]);
                 $businessStart = TimeHelper::parseTime('09:00');
                 $businessEnd = TimeHelper::parseTime('18:00');
+                
+                // Fallback to Carbon::createFromTime if parseTime fails
+                if (!$businessStart) {
+                    $businessStart = \Carbon\Carbon::today(TimeHelper::getTimezone())->setTime(9, 0, 0);
+                }
+                if (!$businessEnd) {
+                    $businessEnd = \Carbon\Carbon::today(TimeHelper::getTimezone())->setTime(18, 0, 0);
+                }
             } else {
                 // Use the earliest start time and latest end time from all staff schedules
                 $earliestStart = $staffSchedules->min('start_time');
@@ -401,6 +409,14 @@ class AppointmentController extends Controller
                     ]);
                     $businessStart = TimeHelper::parseTime('09:00');
                     $businessEnd = TimeHelper::parseTime('18:00');
+                    
+                    // Fallback to Carbon::createFromTime if parseTime fails
+                    if (!$businessStart) {
+                        $businessStart = \Carbon\Carbon::today(TimeHelper::getTimezone())->setTime(9, 0, 0);
+                    }
+                    if (!$businessEnd) {
+                        $businessEnd = \Carbon\Carbon::today(TimeHelper::getTimezone())->setTime(18, 0, 0);
+                    }
                 } else {
                     // Use TimeHelper for consistent timezone handling
                     try {
@@ -417,14 +433,25 @@ class AppointmentController extends Controller
                         ]);
                         $businessStart = TimeHelper::parseTime('09:00');
                         $businessEnd = TimeHelper::parseTime('18:00');
+                        
+                        // Fallback to Carbon::createFromTime if parseTime fails
+                        if (!$businessStart) {
+                            $businessStart = \Carbon\Carbon::today(TimeHelper::getTimezone())->setTime(9, 0, 0);
+                        }
+                        if (!$businessEnd) {
+                            $businessEnd = \Carbon\Carbon::today(TimeHelper::getTimezone())->setTime(18, 0, 0);
+                    }
                     }
                     
+                    // Ensure we have valid Carbon instances before logging
+                    if ($businessStart && $businessEnd) {
                     \Log::info('Calculated business hours from staff schedules:', [
                         'earliest_start' => $earliestStart,
                         'latest_end' => $latestEnd,
                         'business_start' => $businessStart->format('H:i'),
                         'business_end' => $businessEnd->format('H:i')
                     ]);
+                    }
                 }
             }
 
@@ -717,7 +744,9 @@ class AppointmentController extends Controller
             $request->validate([
                 'date' => ['required', 'date', function ($attribute, $value, $fail) {
                     $date = TimeHelper::parseDate($value);
-                    if (!$date || $date->lt(TimeHelper::today())) {
+                    if (!$date) {
+                        $fail('Invalid date format.');
+                    } elseif ($date->lt(TimeHelper::today())) {
                         $fail('The date must be today or a future date.');
                     }
                 }],

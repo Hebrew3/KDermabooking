@@ -191,14 +191,16 @@ class ScheduleController extends Controller
 
     /**
      * Get appointments for the month.
+     * Expanded to include 3 months before and 6 months after current month for better calendar visibility.
      */
     private function getMonthlyAppointments($staff)
     {
-        $startOfMonth = Carbon::now()->startOfMonth();
-        $endOfMonth = Carbon::now()->endOfMonth();
+        // Expand date range: 3 months before and 6 months after current month
+        $startDate = Carbon::now()->startOfMonth()->subMonths(3);
+        $endDate = Carbon::now()->endOfMonth()->addMonths(6);
         
         return \App\Models\Appointment::where('staff_id', $staff->id)
-            ->whereBetween('appointment_date', [$startOfMonth, $endOfMonth])
+            ->whereBetween('appointment_date', [$startDate, $endDate])
             ->with(['client', 'service'])
             ->orderBy('appointment_date')
             ->orderBy('appointment_time')
@@ -208,7 +210,7 @@ class ScheduleController extends Controller
                     'id' => $appointment->id,
                     'appointment_date' => $appointment->appointment_date,
                     'appointment_time' => $appointment->appointment_time,
-                    'client_name' => $appointment->client->name,
+                    'client_name' => $appointment->client->name ?? ($appointment->walkin_customer_name ?? 'Walk-in Customer'),
                     'service_name' => $appointment->service->name,
                     'status' => $appointment->status,
                 ];
@@ -218,22 +220,37 @@ class ScheduleController extends Controller
 
     /**
      * Get monthly unavailabilities.
+     * Expanded to include 3 months before and 6 months after current month for better calendar visibility.
      */
     private function getMonthlyUnavailabilities($staff)
     {
-        $startOfMonth = Carbon::now()->startOfMonth();
-        $endOfMonth = Carbon::now()->endOfMonth();
+        // Expand date range: 3 months before and 6 months after current month
+        $startDate = Carbon::now()->startOfMonth()->subMonths(3);
+        $endDate = Carbon::now()->endOfMonth()->addMonths(6);
 
         $unavailabilities = StaffUnavailability::where('staff_id', $staff->id)
             ->where('approval_status', 'approved')
-            ->whereBetween('unavailable_date', [$startOfMonth, $endOfMonth])
+            ->whereBetween('unavailable_date', [$startDate, $endDate])
             ->orderBy('unavailable_date')
-            ->get();
+            ->get()
+            ->map(function($unavailability) {
+                return [
+                    'id' => $unavailability->id,
+                    'staff_id' => $unavailability->staff_id,
+                    'unavailable_date' => $unavailability->unavailable_date->format('Y-m-d'),
+                    'start_time' => $unavailability->start_time,
+                    'end_time' => $unavailability->end_time,
+                    'reason' => $unavailability->reason,
+                    'notes' => $unavailability->notes,
+                    'is_emergency' => $unavailability->is_emergency,
+                    'approval_status' => $unavailability->approval_status,
+                ];
+            });
 
         // Debug: Log what unavailabilities are being retrieved
         \Log::info('Monthly unavailabilities retrieved:', [
             'staff_id' => $staff->id,
-            'date_range' => [$startOfMonth->format('Y-m-d'), $endOfMonth->format('Y-m-d')],
+            'date_range' => [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')],
             'count' => $unavailabilities->count(),
             'unavailabilities' => $unavailabilities->toArray()
         ]);
@@ -273,7 +290,7 @@ class ScheduleController extends Controller
                 'is_available' => $schedule->is_available,
                 'formatted_hours' => $schedule->formatted_hours
             ] : null,
-            'unavailabilities' => $unavailabilities->map(function($unavailability) {
+            'unavailabilities' => $unavailabilities->map(function($unavailability) use ($time) {
                 return [
                     'id' => $unavailability->id,
                     'date' => $unavailability->unavailable_date,

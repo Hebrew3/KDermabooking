@@ -256,8 +256,8 @@
                                                 </svg>
                                             </div>
                                             <div class="flex-1">
-                                                <h3 class="font-medium text-gray-900">{{ $appointment->client->name }}</h3>
-                                                <p class="text-sm text-gray-600">{{ $appointment->service->name }}</p>
+                                                <h3 class="font-medium text-gray-900">{{ $appointment->customer_name }}</h3>
+                                                <p class="text-sm text-gray-600">{{ $appointment->service ? $appointment->service->name : 'N/A' }}</p>
                                             </div>
                                         </div>
                                         <div class="flex items-center space-x-3">
@@ -352,10 +352,10 @@
                                         @foreach($upcomingAppointments as $appointment)
                                         <tr>
                                             <td class="px-6 py-4 whitespace-nowrap">
-                                                <div class="text-sm font-medium text-gray-900">{{ $appointment->client->name }}</div>
-                                                <div class="text-sm text-gray-500">{{ $appointment->client->email }}</div>
+                                                <div class="text-sm font-medium text-gray-900">{{ $appointment->customer_name }}</div>
+                                                <div class="text-sm text-gray-500">{{ $appointment->customer_email ?? 'N/A' }}</div>
                                             </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->service->name }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->service ? $appointment->service->name : 'N/A' }}</td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y') }}</td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ \Carbon\Carbon::parse($appointment->appointment_time)->format('g:i A') }}</td>
                                             <td class="px-6 py-4 whitespace-nowrap">

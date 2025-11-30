@@ -25,6 +25,8 @@ class AnalyticsController extends Controller
         $year = $request->get('year', now()->year);
         $month = $request->get('month', now()->month);
         $productId = $request->get('product', null);
+        $staffYear = $request->get('staff_year', now()->year);
+        $staffMonth = $request->get('staff_month', now()->month);
         
         $startDate = now()->subDays($period);
         $endDate = now();
@@ -56,7 +58,21 @@ class AnalyticsController extends Controller
         $monthlyTrends = $this->getMonthlyTrends();
 
         // Staff Scheduling Analytics (Services completed by each staff member)
-        $staffSchedulingData = $this->getStaffSchedulingAnalytics($startDate, $endDate);
+        // Use separate date range based on staff_year and staff_month filters
+        if ($staffYear && $staffMonth) {
+            // If both year and month are specified, use that specific month
+            $staffSchedulingStartDate = Carbon::create($staffYear, $staffMonth, 1)->startOfMonth();
+            $staffSchedulingEndDate = Carbon::create($staffYear, $staffMonth, 1)->endOfMonth();
+        } elseif ($staffYear) {
+            // If only year is specified, use the entire year
+            $staffSchedulingStartDate = Carbon::create($staffYear, 1, 1)->startOfYear();
+            $staffSchedulingEndDate = Carbon::create($staffYear, 12, 31)->endOfYear();
+        } else {
+            // Default to current month
+            $staffSchedulingStartDate = now()->startOfMonth();
+            $staffSchedulingEndDate = now()->endOfMonth();
+        }
+        $staffSchedulingData = $this->getStaffSchedulingAnalytics($staffSchedulingStartDate, $staffSchedulingEndDate);
 
         // Services Monthly Analytics (Highest demand per month)
         $servicesMonthlyData = $this->getServicesMonthlyAnalytics();
@@ -82,7 +98,9 @@ class AnalyticsController extends Controller
             'period',
             'year',
             'month',
-            'productId'
+            'productId',
+            'staffYear',
+            'staffMonth'
         ));
     }
 

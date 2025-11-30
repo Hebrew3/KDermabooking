@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\InventoryItem;
+use App\Models\InventoryStockLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use App\Traits\LogsActivity;
 
 class InventoryController extends Controller
@@ -135,10 +137,19 @@ class InventoryController extends Controller
 
         $data = $request->all();
         
-        // Initialize total_volume_ml if volume_per_container is set
+        // Calculate volume_per_container from content_per_unit if not explicitly set
+        if (empty($data['volume_per_container']) && !empty($data['content_per_unit']) && !empty($data['content_unit'])) {
+            $contentPerUnit = (float) $data['content_per_unit'];
+            $contentUnit = $data['content_unit'];
+            $data['volume_per_container'] = $this->convertContentToMl($contentPerUnit, $contentUnit);
+        }
+        
+        // Initialize total_volume_ml from volume_per_container and current_stock
         if (!empty($data['volume_per_container']) && $data['volume_per_container'] > 0) {
-            $data['total_volume_ml'] = ($data['current_stock'] ?? 0) * $data['volume_per_container'];
-            $data['remaining_volume_per_container'] = min($data['volume_per_container'], $data['total_volume_ml']);
+            $volumePerContainer = (float) $data['volume_per_container'];
+            $currentStock = (int) ($data['current_stock'] ?? 0);
+            $data['total_volume_ml'] = $currentStock * $volumePerContainer;
+            $data['remaining_volume_per_container'] = min($volumePerContainer, $data['total_volume_ml']);
         }
 
         $item = InventoryItem::create($data);
@@ -202,16 +213,42 @@ class InventoryController extends Controller
 
         $data = $request->all();
         
-        // Update total_volume_ml if volume_per_container is set and changed
+        // Calculate volume_per_container from content_per_unit if not explicitly set
+        if (empty($data['volume_per_container']) && !empty($data['content_per_unit']) && !empty($data['content_unit'])) {
+            $contentPerUnit = (float) $data['content_per_unit'];
+            $contentUnit = $data['content_unit'];
+            $data['volume_per_container'] = $this->convertContentToMl($contentPerUnit, $contentUnit);
+        }
+        
+        // For mL-tracked items: Auto-calculate current_stock from total_volume_ml
+        // For non-mL items: Use the provided current_stock
         if (!empty($data['volume_per_container']) && $data['volume_per_container'] > 0) {
-            // If total_volume_ml is not being explicitly set, calculate from current_stock
-            if (!isset($data['total_volume_ml']) || $data['total_volume_ml'] == 0) {
-                $data['total_volume_ml'] = ($data['current_stock'] ?? 0) * $data['volume_per_container'];
+            $volumePerContainer = (float) $data['volume_per_container'];
+            
+            // If total_volume_ml exists (from virtual deduction), calculate current_stock from it
+            // Otherwise, calculate total_volume_ml from current_stock
+            if (isset($inventoryItem->total_volume_ml) && $inventoryItem->total_volume_ml > 0) {
+                // Use existing total_volume_ml (preserve virtual deduction state)
+                $data['total_volume_ml'] = (float) $inventoryItem->total_volume_ml;
+                // Auto-calculate current_stock from total_volume_ml
+                $data['current_stock'] = (int) ceil($data['total_volume_ml'] / $volumePerContainer);
+            } else {
+                // New item or no virtual deduction yet: calculate from current_stock
+                $currentStock = (int) ($data['current_stock'] ?? $inventoryItem->current_stock ?? 0);
+                $data['total_volume_ml'] = $currentStock * $volumePerContainer;
+                $data['current_stock'] = $currentStock;
             }
-            // Initialize remaining_volume_per_container if not set
+            
+            // Initialize remaining_volume_per_container if not set or if it exceeds volume_per_container
             if (!isset($data['remaining_volume_per_container']) || $data['remaining_volume_per_container'] === null) {
-                $data['remaining_volume_per_container'] = min($data['volume_per_container'], $data['total_volume_ml']);
+                $data['remaining_volume_per_container'] = min($volumePerContainer, $data['total_volume_ml']);
+            } elseif ((float) $data['remaining_volume_per_container'] > $volumePerContainer) {
+                // Ensure remaining doesn't exceed volume_per_container
+                $data['remaining_volume_per_container'] = min($volumePerContainer, $data['total_volume_ml']);
             }
+        } else {
+            // For non-mL tracked items, use the provided current_stock as-is
+            $data['current_stock'] = (int) ($data['current_stock'] ?? $inventoryItem->current_stock ?? 0);
         }
 
         $inventoryItem->update($data);
@@ -251,21 +288,104 @@ class InventoryController extends Controller
             'notes' => 'nullable|string|max:500',
         ]);
 
+        // Reload to get latest values
+        $inventoryItem->refresh();
+        
         $oldStock = $inventoryItem->current_stock;
+        $oldTotalVolume = $inventoryItem->usesMlTracking() 
+            ? (float) ($inventoryItem->total_volume_ml ?? 0) 
+            : null;
+        $updateData = [];
 
-        switch ($request->type) {
-            case 'add':
-                $newStock = $oldStock + $request->quantity;
-                break;
-            case 'subtract':
-                $newStock = max(0, $oldStock - $request->quantity);
-                break;
-            case 'set':
-                $newStock = max(0, $request->quantity);
-                break;
+        // Handle mL-tracked items differently
+        if ($inventoryItem->usesMlTracking()) {
+            $volumePerContainer = (float) $inventoryItem->volume_per_container;
+            
+            // Calculate volume change based on quantity change
+            $quantityChange = 0;
+            switch ($request->type) {
+                case 'add':
+                    $quantityChange = $request->quantity;
+                    break;
+                case 'subtract':
+                    $quantityChange = -$request->quantity;
+                    break;
+                case 'set':
+                    $quantityChange = $request->quantity - $oldStock;
+                    break;
+            }
+            
+            // Calculate new total volume
+            $volumeChange = $quantityChange * $volumePerContainer;
+            $newTotalVolume = max(0, $oldTotalVolume + $volumeChange);
+            
+            // Calculate new stock from total volume
+            $newStock = (int) ceil($newTotalVolume / $volumePerContainer);
+            
+            // Update mL-related fields
+            $updateData['total_volume_ml'] = $newTotalVolume;
+            $updateData['current_stock'] = $newStock;
+            
+            // Update remaining volume per container
+            if ($newTotalVolume > 0) {
+                $fullContainers = (int) floor($newTotalVolume / $volumePerContainer);
+                $remainingVolume = $newTotalVolume - ($fullContainers * $volumePerContainer);
+                $updateData['remaining_volume_per_container'] = min($volumePerContainer, $remainingVolume);
+            } else {
+                $updateData['remaining_volume_per_container'] = 0;
+            }
+            
+            // For logging, use the quantity change (in units)
+            $logQuantityChange = $quantityChange;
+            $logStockBefore = $oldTotalVolume;
+            $logStockAfter = $newTotalVolume;
+        } else {
+            // For non-mL tracked items, update current_stock directly
+            switch ($request->type) {
+                case 'add':
+                    $newStock = $oldStock + $request->quantity;
+                    $logQuantityChange = $request->quantity;
+                    break;
+                case 'subtract':
+                    $newStock = max(0, $oldStock - $request->quantity);
+                    $logQuantityChange = -$request->quantity;
+                    break;
+                case 'set':
+                    $newStock = max(0, $request->quantity);
+                    $logQuantityChange = $newStock - $oldStock;
+                    break;
+            }
+            
+            $updateData['current_stock'] = $newStock;
+            $logStockBefore = (float) $oldStock;
+            $logStockAfter = (float) $newStock;
         }
 
-        $inventoryItem->update(['current_stock' => $newStock]);
+        // Update the inventory item
+        $inventoryItem->update($updateData);
+        
+        // Reload to get updated values
+        $inventoryItem->refresh();
+        
+        // Determine activity type
+        $activityType = 'adjusted';
+        if ($request->type === 'add') {
+            $activityType = 'restock';
+        } elseif ($request->type === 'subtract') {
+            $activityType = 'used';
+        }
+
+        // Log stock change
+        InventoryStockLog::create([
+            'inventory_item_id' => $inventoryItem->id,
+            'activity_type' => $activityType,
+            'stock_before' => $logStockBefore,
+            'quantity_change' => $logQuantityChange,
+            'stock_after' => $logStockAfter,
+            'unit' => $inventoryItem->unit,
+            'notes' => $request->notes ?? "Stock {$request->type} by {$request->quantity}",
+            'user_id' => Auth::id(),
+        ]);
 
         // Log activity
         $action = $request->type === 'add' ? 'added' : ($request->type === 'subtract' ? 'subtracted' : 'set');
@@ -347,5 +467,67 @@ class InventoryController extends Controller
         }
         
         return $sku;
+    }
+
+    /**
+     * Convert content_per_unit to mL based on the unit.
+     * 
+     * @param float $value The value to convert
+     * @param string $unit The unit of the value (mL, L, g, kg, oz, fl oz, etc.)
+     * @return float The value converted to mL
+     */
+    private function convertContentToMl(float $value, string $unit): float
+    {
+        $unit = strtolower(trim($unit));
+        
+        switch ($unit) {
+            case 'ml':
+            case 'milliliter':
+            case 'millilitre':
+                return $value;
+            
+            case 'l':
+            case 'liter':
+            case 'litre':
+                return $value * 1000; // 1 L = 1000 mL
+            
+            case 'fl oz':
+            case 'fluid ounce':
+            case 'fluid oz':
+                return $value * 29.5735; // 1 fl oz ≈ 29.5735 mL
+            
+            case 'oz':
+            case 'ounce':
+                // For weight (oz), we can't directly convert to mL without density
+                // Assume it's fluid ounce if not specified
+                return $value * 29.5735;
+            
+            case 'g':
+            case 'gram':
+            case 'grams':
+                // For weight, we can't directly convert to mL without density
+                // For water: 1g = 1mL, but for other substances it varies
+                // We'll assume 1g = 1mL as a reasonable default for most liquids
+                return $value;
+            
+            case 'kg':
+            case 'kilogram':
+            case 'kilograms':
+                // For weight, assume 1kg = 1000mL (for water-like density)
+                return $value * 1000;
+            
+            case 'pc':
+            case 'pcs':
+            case 'piece':
+            case 'pieces':
+                // For pieces, we can't convert to mL
+                // Return 0 to indicate conversion not possible
+                return 0;
+            
+            default:
+                // Unknown unit, assume it's already in mL
+                \Log::warning("Unknown unit '{$unit}' for content conversion in InventoryController. Assuming mL.");
+                return $value;
+        }
     }
 }

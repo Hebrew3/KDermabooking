@@ -34,7 +34,7 @@
                 :active="request()->routeIs('admin.users.*')"
             >
                 <x-slot name="icon">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                 </x-slot>
                 User Management
             </x-sidebar-link>
@@ -96,11 +96,20 @@
 
                     <!-- Staff Schedule -->
                     <a href="{{ route('admin.staff-schedule.index') }}" 
-                       class="flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors duration-200 {{ request()->routeIs('admin.staff-schedule.*') ? 'bg-pink-50 text-pink-600 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-pink-600' }}">
+                       class="flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors duration-200 {{ request()->routeIs('admin.staff-schedule.index') || request()->routeIs('admin.staff-schedule.edit') ? 'bg-pink-50 text-pink-600 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-pink-600' }}">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                         </svg>
                         <span>Staff Schedule</span>
+                    </a>
+
+                    <!-- Time Slot Availability -->
+                    <a href="{{ route('admin.staff-schedule.time-slots') }}" 
+                       class="flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors duration-200 {{ request()->routeIs('admin.staff-schedule.time-slots') ? 'bg-pink-50 text-pink-600 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-pink-600' }}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span>Time Slot Availability</span>
                     </a>
 
                     <!-- Staff Leave Requests -->
@@ -109,7 +118,8 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                         </svg>
-                        <span>Staff Leave Requests</span>
+                        <span class="flex-1">Staff Leave Requests</span>
+                        <span id="leave-requests-badge" class="ml-auto bg-pink-500 text-white text-xs font-bold px-2 py-0.5 rounded-full hidden">0</span>
                     </a>
                 </div>
             </div>
@@ -144,7 +154,7 @@
                 <x-slot name="icon">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                 </x-slot>
-                Sales & Analytics
+                Sales Analytics
             </x-sidebar-link>
 
             <!-- Analytics -->
@@ -241,15 +251,83 @@ function toggleUserMenu() {
     }
 }
 
-// Close user menu when clicking outside
-document.addEventListener('click', function(event) {
-    const userMenu = document.getElementById('user-menu');
-    const userButton = event.target.closest('button');
+    // Close user menu when clicking outside
+    document.addEventListener('click', function(event) {
+        const userMenu = document.getElementById('user-menu');
+        const userButton = event.target.closest('button');
 
-    if (userMenu && (!userButton || !userButton.onclick || userButton.onclick.toString().indexOf('toggleUserMenu') === -1)) {
-        userMenu.classList.add('hidden');
+        if (userMenu && (!userButton || !userButton.onclick || userButton.onclick.toString().indexOf('toggleUserMenu') === -1)) {
+            userMenu.classList.add('hidden');
+        }
+    });
+
+    // Update leave requests notification badge and show pop-up
+    function updateLeaveRequestsBadge() {
+        fetch('{{ route("admin.staff-leave.pending-count") }}', {
+            method: 'GET',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                'Accept': 'application/json',
+            },
+            credentials: 'same-origin'
+        })
+        .then(response => response.json())
+        .then(data => {
+            const badge = document.getElementById('leave-requests-badge');
+            if (badge) {
+                if (data.pending_count > 0) {
+                    badge.textContent = data.pending_count > 99 ? '99+' : data.pending_count;
+                    badge.classList.remove('hidden');
+                    
+                    // Show pop-up alert if there are pending requests and user hasn't been notified yet
+                    const lastNotification = sessionStorage.getItem('leaveRequestsLastNotification');
+                    const currentCount = data.pending_count;
+                    
+                    if (!lastNotification || parseInt(lastNotification) !== currentCount) {
+                        // Show SweetAlert pop-up
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                title: 'Pending Leave Requests',
+                                html: `<div class="text-left">
+                                    <p class="mb-3">You have <strong class="text-pink-600">${currentCount}</strong> pending leave request${currentCount > 1 ? 's' : ''} that need${currentCount === 1 ? 's' : ''} your review.</p>
+                                    <p class="text-sm text-gray-600">Click on "Staff Leave Requests" to review and approve or reject them.</p>
+                                </div>`,
+                                icon: 'info',
+                                iconColor: '#ec4899',
+                                confirmButtonColor: '#ec4899',
+                                confirmButtonText: 'View Requests',
+                                showCancelButton: true,
+                                cancelButtonText: 'Later',
+                                reverseButtons: true,
+                                allowOutsideClick: false,
+                                allowEscapeKey: true
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    window.location.href = '{{ route("admin.staff-leave.index", ["status" => "pending"]) }}';
+                                }
+                                // Store notification to prevent showing again for same count
+                                sessionStorage.setItem('leaveRequestsLastNotification', currentCount.toString());
+                            });
+                        }
+                    }
+                } else {
+                    badge.classList.add('hidden');
+                    // Clear notification if count is 0
+                    sessionStorage.removeItem('leaveRequestsLastNotification');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching pending leave requests count:', error);
+        });
     }
-});
+
+    // Update badge on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        updateLeaveRequestsBadge();
+        // Update badge every 30 seconds
+        setInterval(updateLeaveRequestsBadge, 30000);
+    });
 </script>
 
 <style>

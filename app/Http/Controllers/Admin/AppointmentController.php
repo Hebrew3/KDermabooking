@@ -191,23 +191,20 @@ class AppointmentController extends Controller
             'walkin_customer_phone' => 'required_if:is_walkin,1|nullable|string|max:20',
         ]);
 
-        // Validate that either client_id or walk-in info is provided
-        if (!$request->client_id && !$request->is_walkin) {
-            return back()->withErrors(['client_id' => 'Please select a client or enter walk-in customer information.'])->withInput();
-        }
-
-        // For walk-in appointments, ensure date is today only
-        if ($request->is_walkin) {
-            $today = TimeHelper::todayString();
-            if ($request->appointment_date !== $today) {
-                return back()->withErrors(['appointment_date' => 'Walk-in appointments must be scheduled for today only.'])->withInput();
-            }
+        // Determine if this is a walk-in appointment (preserve original type)
+        $isWalkin = $request->has('is_walkin') && ($request->is_walkin == '1' || $request->is_walkin === 1 || $request->is_walkin === true);
+        
+        // Preserve the original appointment type - cannot change from registered to walk-in or vice versa
+        $originalIsWalkin = $appointment->isWalkIn();
+        
+        if ($isWalkin !== $originalIsWalkin) {
+            return back()->withErrors(['is_walkin' => 'Cannot change customer type. Please create a new appointment instead.'])->withInput();
         }
 
         $service = Service::findOrFail($request->service_id);
 
+        // Prepare update data - preserve client/walk-in info from original appointment
         $updateData = [
-            'client_id' => $request->client_id,
             'service_id' => $request->service_id,
             'staff_id' => $request->staff_id,
             'appointment_date' => $request->appointment_date,
@@ -217,10 +214,20 @@ class AppointmentController extends Controller
             'total_amount' => $service->price,
             'notes' => $request->notes,
             'staff_notes' => $request->staff_notes,
-            'walkin_customer_name' => $request->walkin_customer_name,
-            'walkin_customer_email' => $request->walkin_customer_email,
-            'walkin_customer_phone' => $request->walkin_customer_phone,
         ];
+
+        // Preserve original client/walk-in information (from hidden fields)
+        if ($isWalkin) {
+            $updateData['client_id'] = null;
+            $updateData['walkin_customer_name'] = $request->walkin_customer_name;
+            $updateData['walkin_customer_email'] = $request->walkin_customer_email;
+            $updateData['walkin_customer_phone'] = $request->walkin_customer_phone;
+        } else {
+            $updateData['client_id'] = $request->client_id;
+            $updateData['walkin_customer_name'] = null;
+            $updateData['walkin_customer_email'] = null;
+            $updateData['walkin_customer_phone'] = null;
+        }
 
         // Update appointment services (sync with new service)
         $appointment->services()->sync([$service->id => ['price' => $service->price]]);

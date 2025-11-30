@@ -66,12 +66,15 @@
                                         name="category"
                                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-200 bg-white @error('category') border-red-500 @enderror">
                                 <option value="">Select Category</option>
-                                <option value="facial" {{ old('category') === 'facial' ? 'selected' : '' }}>Facial Treatment</option>
-                                <option value="laser" {{ old('category') === 'laser' ? 'selected' : '' }}>Laser Treatment</option>
-                                <option value="injection" {{ old('category') === 'injection' ? 'selected' : '' }}>Injection Treatment</option>
-                                <option value="peel" {{ old('category') === 'peel' ? 'selected' : '' }}>Chemical Peel</option>
-                                <option value="consultation" {{ old('category') === 'consultation' ? 'selected' : '' }}>Consultation</option>
-                                <option value="other" {{ old('category') === 'other' ? 'selected' : '' }}>Other</option>
+                                <option value="complete_facial" {{ old('category') === 'complete_facial' ? 'selected' : '' }}>Complete Facial</option>
+                                <option value="laser_hair_removal" {{ old('category') === 'laser_hair_removal' ? 'selected' : '' }}>Laser Hair Removal</option>
+                                <option value="laser_skin_treatment" {{ old('category') === 'laser_skin_treatment' ? 'selected' : '' }}>Laser Skin Treatment</option>
+                                <option value="skin_peeling" {{ old('category') === 'skin_peeling' ? 'selected' : '' }}>Skin Peeling</option>
+                                <option value="tightening_contouring" {{ old('category') === 'tightening_contouring' ? 'selected' : '' }}>Tightening and Contouring</option>
+                                <option value="mesolipo" {{ old('category') === 'mesolipo' ? 'selected' : '' }}>Mesolipo</option>
+                                <option value="gluta_drip" {{ old('category') === 'gluta_drip' ? 'selected' : '' }}>Gluta Drip</option>
+                                <option value="waxing" {{ old('category') === 'waxing' ? 'selected' : '' }}>Waxing</option>
+                                <option value="pathologic_non_invasive" {{ old('category') === 'pathologic_non_invasive' ? 'selected' : '' }}>Pathologic / Non-Invasive</option>
                             </select>
                             @error('category')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -110,20 +113,6 @@
                             @enderror
                         </div>
 
-                            <!-- Sort Order -->
-                            <div>
-                                <label for="sort_order" class="block text-sm font-semibold text-gray-700 mb-2">Sort Order</label>
-                                <input type="number"
-                                       id="sort_order"
-                                       name="sort_order"
-                                       value="{{ old('sort_order', 0) }}"
-                                       min="0"
-                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-200 @error('sort_order') border-red-500 @enderror"
-                                       placeholder="0">
-                                @error('sort_order')
-                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                @enderror
-                            </div>
                         </div>
                     </div>
 
@@ -143,19 +132,6 @@
                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-200 @error('description') border-red-500 @enderror"
                                       placeholder="Enter detailed service description">{{ old('description') }}</textarea>
                         @error('description')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <!-- Short Description -->
-                    <div>
-                        <label for="short_description" class="block text-sm font-medium text-gray-700 mb-2">Short Description</label>
-                        <textarea id="short_description"
-                                  name="short_description"
-                                  rows="2"
-                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('short_description') border-red-500 @enderror"
-                                  placeholder="Brief description for cards and listings">{{ old('short_description') }}</textarea>
-                        @error('short_description')
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                         @enderror
                     </div>
@@ -192,21 +168,6 @@
                         </div>
                     </div>
 
-                    <!-- Tags -->
-                    <div>
-                        <label for="tags" class="block text-sm font-medium text-gray-700 mb-2">Tags</label>
-                        <input type="text"
-                               id="tags"
-                               name="tags"
-                               value="{{ old('tags') }}"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('tags') border-red-500 @enderror"
-                               placeholder="Enter tags separated by commas (e.g., facial, skincare, anti-aging)">
-                        <p class="mt-1 text-sm text-gray-500">Separate tags with commas for better searchability.</p>
-                        @error('tags')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
                     <!-- Linked Products -->
                     <div>
                         <h3 class="text-lg font-semibold text-gray-900 mb-2">Linked Products</h3>
@@ -224,36 +185,6 @@
                             </svg>
                             <span>Add Product</span>
                         </button>
-                    </div>
-
-                    <!-- SEO Fields -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <!-- Meta Title -->
-                        <div>
-                            <label for="meta_title" class="block text-sm font-medium text-gray-700 mb-2">Meta Title</label>
-                            <input type="text"
-                                   id="meta_title"
-                                   name="meta_title"
-                                   value="{{ old('meta_title') }}"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('meta_title') border-red-500 @enderror"
-                                   placeholder="SEO title for search engines">
-                            @error('meta_title')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Meta Description -->
-                        <div>
-                            <label for="meta_description" class="block text-sm font-medium text-gray-700 mb-2">Meta Description</label>
-                            <textarea id="meta_description"
-                                      name="meta_description"
-                                      rows="3"
-                                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('meta_description') border-red-500 @enderror"
-                                      placeholder="SEO description for search engines">{{ old('meta_description') }}</textarea>
-                            @error('meta_description')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
                     </div>
 
                     <!-- Status Options -->
@@ -330,12 +261,12 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
                     <input type="number" 
                            name="treatment_products[${productRowIndex}][quantity]" 
-                           value="${quantity}"
-                           min="0.001"
-                           step="0.001"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                           required>
-                    <p class="text-xs text-gray-500 mt-1">Supports decimals (e.g., 0.5, 0.25)</p>
+                           value="${volumeUsedPerService ? 0 : quantity}"
+                           min="0"
+                           step="1"
+                           class="quantity-input w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${volumeUsedPerService ? 'bg-gray-100 cursor-not-allowed' : ''}"
+                           ${volumeUsedPerService ? 'readonly' : 'required'}>
+                    <p class="text-xs text-gray-500 mt-1">Auto-set to 0 when using mL</p>
                 </div>
                 <div class="w-32">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Volume Used (mL)</label>
@@ -344,8 +275,8 @@
                            value="${volumeUsedPerService}"
                            min="0"
                            step="0.01"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                           placeholder="e.g., 2">
+                           class="volume-input w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                           placeholder="e.g., 25">
                     <p class="text-xs text-gray-500 mt-1">Leave empty if not using mL</p>
                 </div>
                 <div class="flex items-end pt-6">
@@ -360,6 +291,37 @@
             `;
             
             container.appendChild(row);
+            
+            // Add event listeners for volume/quantity toggle
+            const volumeInput = row.querySelector('.volume-input');
+            const quantityInput = row.querySelector('.quantity-input');
+            
+            volumeInput.addEventListener('input', function() {
+                if (this.value && parseFloat(this.value) > 0) {
+                    // If volume is set, set quantity to 0 and disable it
+                    quantityInput.value = 0;
+                    quantityInput.classList.add('bg-gray-100', 'cursor-not-allowed');
+                    quantityInput.setAttribute('readonly', 'readonly');
+                    quantityInput.removeAttribute('required');
+                } else {
+                    // If volume is cleared, enable quantity
+                    quantityInput.classList.remove('bg-gray-100', 'cursor-not-allowed');
+                    quantityInput.removeAttribute('readonly');
+                    quantityInput.setAttribute('required', 'required');
+                    if (quantityInput.value == 0) {
+                        quantityInput.value = 1;
+                    }
+                }
+            });
+            
+            // Initialize state on load
+            if (volumeUsedPerService && parseFloat(volumeUsedPerService) > 0) {
+                quantityInput.value = 0;
+                quantityInput.classList.add('bg-gray-100', 'cursor-not-allowed');
+                quantityInput.setAttribute('readonly', 'readonly');
+                quantityInput.removeAttribute('required');
+            }
+            
             productRowIndex++;
         }
 

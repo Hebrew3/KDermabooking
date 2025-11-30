@@ -82,17 +82,29 @@
                                             <p class="text-sm text-gray-600">{{ $appointment->customer_phone }}</p>
                                         @endif
                                     @else
-                                        <p class="text-gray-900 font-medium">{{ $appointment->client->name }}</p>
+                                        @if($appointment->client)
+                                            <p class="text-gray-900 font-medium">{{ $appointment->client->name ?? 'N/A' }}</p>
+                                            @if($appointment->client->email)
                                         <p class="text-sm text-gray-600">{{ $appointment->client->email }}</p>
+                                            @endif
+                                            @if($appointment->client->mobile_number)
                                         <p class="text-sm text-gray-600">{{ $appointment->client->mobile_number }}</p>
+                                            @endif
+                                        @else
+                                            <p class="text-gray-900 font-medium">Client information not available</p>
+                                        @endif
                                     @endif
                                 </div>
                             </div>
 
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Service</label>
+                                @if($appointment->service)
                                 <p class="text-gray-900 font-medium">{{ $appointment->service->name }}</p>
                                 <p class="text-sm text-gray-600">{{ $appointment->service->formatted_duration }} • {{ $appointment->service->formatted_price }}</p>
+                                @else
+                                    <p class="text-gray-900 font-medium">Service information not available</p>
+                                @endif
                             </div>
 
                             <div>
@@ -303,18 +315,48 @@
                         <div class="mt-6 pt-6 border-t border-gray-200">
                             <h4 class="font-medium text-gray-900 mb-3">Client Information</h4>
                             <div class="space-y-2 text-sm">
+                                @if($appointment->isWalkIn() || !$appointment->client)
+                                    <div>
+                                        <span class="text-gray-600">Name:</span>
+                                        <span class="text-gray-900 font-medium">{{ $appointment->customer_name ?? 'N/A' }}</span>
+                                    </div>
+                                    @if($appointment->customer_email)
+                                    <div>
+                                        <span class="text-gray-600">Email:</span>
+                                        <a href="mailto:{{ $appointment->customer_email }}" class="text-pink-600 hover:text-pink-800">{{ $appointment->customer_email }}</a>
+                                    </div>
+                                    @endif
+                                    @if($appointment->customer_phone)
+                                    <div>
+                                        <span class="text-gray-600">Phone:</span>
+                                        <a href="tel:{{ $appointment->customer_phone }}" class="text-pink-600 hover:text-pink-800">{{ $appointment->customer_phone }}</a>
+                                    </div>
+                                    @endif
+                                @else
+                                    @if($appointment->client)
                                 <div>
                                     <span class="text-gray-600">Name:</span>
-                                    <span class="text-gray-900 font-medium">{{ $appointment->client->name }}</span>
+                                            <span class="text-gray-900 font-medium">{{ $appointment->client->name ?? 'N/A' }}</span>
                                 </div>
+                                        @if($appointment->client->email)
                                 <div>
                                     <span class="text-gray-600">Email:</span>
                                     <a href="mailto:{{ $appointment->client->email }}" class="text-pink-600 hover:text-pink-800">{{ $appointment->client->email }}</a>
                                 </div>
+                                        @endif
+                                        @if($appointment->client->mobile_number)
                                 <div>
                                     <span class="text-gray-600">Phone:</span>
                                     <a href="tel:{{ $appointment->client->mobile_number }}" class="text-pink-600 hover:text-pink-800">{{ $appointment->client->mobile_number }}</a>
                                 </div>
+                                        @endif
+                                    @else
+                                        <div>
+                                            <span class="text-gray-600">Name:</span>
+                                            <span class="text-gray-900 font-medium">Client information not available</span>
+                                        </div>
+                                    @endif
+                                @endif
                             </div>
                         </div>
                     </div>

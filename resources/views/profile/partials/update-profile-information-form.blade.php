@@ -91,7 +91,7 @@
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
                 <x-input-label for="mobile_number" :value="__('Mobile Number')" />
-                <x-text-input id="mobile_number" name="mobile_number" type="tel" class="mt-1 block w-full" :value="old('mobile_number', $user->mobile_number)" required autocomplete="tel" />
+                <x-text-input id="mobile_number" name="mobile_number" type="tel" class="mt-1 block w-full" :value="old('mobile_number', $user->mobile_number)" required autocomplete="tel" maxlength="11" pattern="[0-9]{11}" inputmode="numeric" placeholder="Enter 11-digit mobile number" />
                 <x-input-error class="mt-2" :messages="$errors->get('mobile_number')" />
             </div>
             <div>

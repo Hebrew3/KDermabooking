@@ -78,6 +78,34 @@ class Service extends Model
     }
 
     /**
+     * Get formatted category name.
+     */
+    public function getFormattedCategoryAttribute(): string
+    {
+        $categoryMap = [
+            // New categories
+            'complete_facial' => 'Complete Facial',
+            'laser_hair_removal' => 'Laser Hair Removal',
+            'laser_skin_treatment' => 'Laser Skin Treatment',
+            'skin_peeling' => 'Skin Peeling',
+            'tightening_contouring' => 'Tightening and Contouring',
+            'mesolipo' => 'Mesolipo',
+            'gluta_drip' => 'Gluta Drip',
+            'waxing' => 'Waxing',
+            'pathologic_non_invasive' => 'Pathologic / Non-Invasive',
+            // Old categories (for backward compatibility)
+            'facial' => 'Complete Facial',
+            'laser' => 'Laser Skin Treatment',
+            'injection' => 'Mesolipo',
+            'peel' => 'Skin Peeling',
+            'consultation' => 'Pathologic / Non-Invasive',
+            'other' => 'Other',
+        ];
+
+        return $categoryMap[$this->category] ?? ucfirst(str_replace('_', ' ', $this->category));
+    }
+
+    /**
      * Get the formatted price.
      */
     public function getFormattedPriceAttribute(): string

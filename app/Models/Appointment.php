@@ -255,7 +255,7 @@ class Appointment extends Model
 
             // Use TimeHelper to parse time
             $time = TimeHelper::parseTime($this->appointment_time);
-            
+
             if ($time) {
                 return $appointmentDate->format('M d, Y') . ' at ' . $time->format('g:i A');
             } else {
@@ -263,11 +263,11 @@ class Appointment extends Model
                 return $appointmentDate->format('M d, Y') . ' at ' . $this->appointment_time;
             }
         } catch (\Exception $e) {
-            \Log::error('Error formatting appointment date/time', [
-                'appointment_id' => $this->id,
+                \Log::error('Error formatting appointment date/time', [
+                    'appointment_id' => $this->id,
                 'error' => $e->getMessage()
-            ]);
-            return 'Invalid date';
+                ]);
+                return 'Invalid date';
         }
     }
 
@@ -608,21 +608,40 @@ class Appointment extends Model
                         // Use mL-based deduction
                         $volumeMl = null;
                         
-                        // Priority 1: Use volume_used_per_service if set
-                        if (isset($product->pivot->volume_used_per_service) && $product->pivot->volume_used_per_service !== null && $product->pivot->volume_used_per_service !== '') {
+                        // Priority 1: Use volume_used_per_service if set (this deducts directly from content_per_unit)
+                        if (isset($product->pivot->volume_used_per_service) && $product->pivot->volume_used_per_service !== null && $product->pivot->volume_used_per_service !== '' && $product->pivot->volume_used_per_service > 0) {
                             $rawVolume = (float) $product->pivot->volume_used_per_service;
                             // Ensure positive value (use absolute value to prevent negative deductions)
                             $volumeMl = abs($rawVolume);
                             
-                            \Log::info("Using volume_used_per_service for product {$inventoryItem->name}: raw={$rawVolume}, final={$volumeMl}");
+                            \Log::info("Using volume_used_per_service for product {$inventoryItem->name}: raw={$rawVolume}, final={$volumeMl} mL (deducting from content_per_unit)");
                         } 
-                        // Priority 2: Calculate from quantity if volume_used_per_service is not set
+                        // Priority 2: Calculate from quantity using content_per_unit if volume_used_per_service is not set or is 0
                         else {
-                            $quantity = (int) ($product->pivot->quantity ?? 1);
-                            if ($quantity > 0 && $inventoryItem->volume_per_container > 0) {
-                                // Calculate mL from quantity: assume each quantity unit uses the full volume_per_container
+                            $quantity = (float) ($product->pivot->quantity ?? 1);
+                            if ($quantity > 0) {
+                                // Use content_per_unit if available (convert to mL if needed)
+                                if ($inventoryItem->content_per_unit && $inventoryItem->content_per_unit > 0) {
+                                    $contentPerUnit = (float) $inventoryItem->content_per_unit;
+                                    $contentUnit = $inventoryItem->content_unit ?? 'mL';
+                                    
+                                    // Convert content_per_unit to mL based on content_unit
+                                    $contentPerUnitInMl = $this->convertToMl($contentPerUnit, $contentUnit);
+                                    
+                                    // Calculate mL from quantity: quantity * content_per_unit (in mL)
+                                    $volumeMl = abs($quantity * $contentPerUnitInMl);
+                                    \Log::info("Calculated volume from quantity using content_per_unit for product {$inventoryItem->name}: quantity={$quantity}, content_per_unit={$contentPerUnit} {$contentUnit} ({$contentPerUnitInMl} mL), volumeMl={$volumeMl}");
+                                } 
+                                // Fallback to volume_per_container if content_per_unit is not available
+                                elseif ($inventoryItem->volume_per_container > 0) {
                                 $volumeMl = abs($quantity * $inventoryItem->volume_per_container);
-                                \Log::info("Calculated volume from quantity for product {$inventoryItem->name}: quantity={$quantity}, volume_per_container={$inventoryItem->volume_per_container}, volumeMl={$volumeMl}");
+                                    \Log::info("Calculated volume from quantity using volume_per_container for product {$inventoryItem->name}: quantity={$quantity}, volume_per_container={$inventoryItem->volume_per_container}, volumeMl={$volumeMl}");
+                                } 
+                                // Last fallback: use quantity as mL directly
+                                else {
+                                    $volumeMl = abs($quantity);
+                                    \Log::info("Using quantity as mL directly for product {$inventoryItem->name} (no content_per_unit or volume_per_container): quantity={$quantity}, volumeMl={$volumeMl}");
+                                }
                             }
                         }
                         
@@ -670,7 +689,7 @@ class Appointment extends Model
                         }
                     } else {
                         // For quantity-based deduction by Unit (Packaging Type)
-                        // Always deduct whole units based on the packaging type (bottle, box, pack, etc.)
+                        // Use the quantity field directly from the service's linked products
                         $quantityToDeduct = (float) ($product->pivot->quantity ?? 1);
                         
                         // Ensure positive value
@@ -684,6 +703,8 @@ class Appointment extends Model
                         // Round up to whole units (by packaging type)
                         // Example: 0.5 bottle becomes 1 bottle, 1.2 boxes becomes 2 boxes
                         $quantityToDeductWholeUnits = (int) ceil($quantityToDeduct);
+                        
+                        \Log::info("Deducting quantity for product {$inventoryItem->name}: quantity_from_service={$quantityToDeduct}, rounded_to_whole_units={$quantityToDeductWholeUnits} {$inventoryItem->unit}");
 
                         // Store stock before deduction
                         $stockBefore = $inventoryItem->current_stock;
@@ -760,6 +781,68 @@ class Appointment extends Model
                 'appointment_id' => $this->id,
                 'trace' => $e->getTraceAsString()
             ]);
+        }
+    }
+
+    /**
+     * Convert a value to mL based on the unit.
+     * 
+     * @param float $value The value to convert
+     * @param string $unit The unit of the value (mL, L, g, kg, oz, fl oz, etc.)
+     * @return float The value converted to mL
+     */
+    private function convertToMl(float $value, string $unit): float
+    {
+        $unit = strtolower(trim($unit));
+        
+        switch ($unit) {
+            case 'ml':
+            case 'milliliter':
+            case 'millilitre':
+                return $value;
+            
+            case 'l':
+            case 'liter':
+            case 'litre':
+                return $value * 1000; // 1 L = 1000 mL
+            
+            case 'fl oz':
+            case 'fluid ounce':
+            case 'fluid oz':
+                return $value * 29.5735; // 1 fl oz ≈ 29.5735 mL
+            
+            case 'oz':
+            case 'ounce':
+                // For weight (oz), we can't directly convert to mL without density
+                // Assume it's fluid ounce if not specified
+                return $value * 29.5735;
+            
+            case 'g':
+            case 'gram':
+            case 'grams':
+                // For weight, we can't directly convert to mL without density
+                // For water: 1g = 1mL, but for other substances it varies
+                // We'll assume 1g = 1mL as a reasonable default for most liquids
+                return $value;
+            
+            case 'kg':
+            case 'kilogram':
+            case 'kilograms':
+                // For weight, assume 1kg = 1000mL (for water-like density)
+                return $value * 1000;
+            
+            case 'pc':
+            case 'pcs':
+            case 'piece':
+            case 'pieces':
+                // For pieces, we can't convert to mL
+                // Return 0 to indicate conversion not possible
+                return 0;
+            
+            default:
+                // Unknown unit, assume it's already in mL
+                \Log::warning("Unknown unit '{$unit}' for content conversion. Assuming mL.");
+                return $value;
         }
     }
 

@@ -29,91 +29,71 @@
                         @csrf
                         @method('PUT')
                         
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <!-- Customer Type Selection -->
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">
-                                    Customer Type
-                                </label>
-                                <div class="flex space-x-4">
-                                    <label class="flex items-center">
-                                        <input type="radio" name="is_walkin" value="0" id="registeredCustomer" {{ !$appointment->isWalkIn() ? 'checked' : '' }} class="mr-2" onchange="toggleCustomerType()">
-                                        <span>Registered Client</span>
-                                    </label>
-                                    <label class="flex items-center">
-                                        <input type="radio" name="is_walkin" value="1" id="walkinCustomer" {{ $appointment->isWalkIn() ? 'checked' : '' }} class="mr-2" onchange="toggleCustomerType()">
-                                        <span>Walk-in Customer</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Client Selection (Registered) -->
-                            <div class="md:col-span-2" id="registeredClientSection" style="display: {{ $appointment->isWalkIn() ? 'none' : 'block' }}">
-                                <label for="client_id" class="block text-sm font-medium text-gray-700 mb-2">
-                                    Select Client <span class="text-red-500">*</span>
-                                </label>
-                                <select name="client_id" id="client_id" class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
-                                    <option value="">Select a customer...</option>
-                                    @foreach($clients as $client)
-                                    <option value="{{ $client->id }}" {{ (old('client_id', $appointment->client_id) == $client->id) ? 'selected' : '' }}>
-                                        {{ $client->name }} - {{ $client->email }}
-                                    </option>
-                                    @endforeach
-                                </select>
-                                @error('client_id')
-                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                @enderror
-                            </div>
-
-                            <!-- Walk-in Customer Fields -->
-                            <div class="md:col-span-2" id="walkinCustomerSection" style="display: {{ $appointment->isWalkIn() ? 'block' : 'none' }}">
-                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                                    <h3 class="text-sm font-medium text-blue-900 mb-3">Walk-in Customer Information</h3>
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label for="walkin_customer_name" class="block text-sm font-medium text-gray-700 mb-2">
-                                                Full Name <span class="text-red-500">*</span>
-                                            </label>
-                                            <input type="text" 
-                                                   name="walkin_customer_name" 
-                                                   id="walkin_customer_name" 
-                                                   value="{{ old('walkin_customer_name', $appointment->walkin_customer_name) }}"
-                                                   class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
-                                            @error('walkin_customer_name')
-                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                            @enderror
-                                        </div>
-                                        <div>
-                                            <label for="walkin_customer_phone" class="block text-sm font-medium text-gray-700 mb-2">
-                                                Phone Number <span class="text-red-500">*</span>
-                                            </label>
-                                            <input type="text" 
-                                                   name="walkin_customer_phone" 
-                                                   id="walkin_customer_phone" 
-                                                   value="{{ old('walkin_customer_phone', $appointment->walkin_customer_phone) }}"
-                                                   placeholder="09XX XXX XXXX"
-                                                   class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
-                                            @error('walkin_customer_phone')
-                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                            @enderror
-                                        </div>
-                                        <div class="md:col-span-2">
-                                            <label for="walkin_customer_email" class="block text-sm font-medium text-gray-700 mb-2">
-                                                Email (Optional)
-                                            </label>
-                                            <input type="email" 
-                                                   name="walkin_customer_email" 
-                                                   id="walkin_customer_email" 
-                                                   value="{{ old('walkin_customer_email', $appointment->walkin_customer_email) }}"
-                                                   placeholder="customer@example.com"
-                                                   class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
-                                            @error('walkin_customer_email')
-                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                            @enderror
-                                        </div>
+                        <!-- Customer Information (Read-only) -->
+                        <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-900 mb-3">Customer Information (Cannot be changed)</h3>
+                            @if($appointment->isWalkIn())
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Customer Type</label>
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                            Walk-in Customer
+                                        </span>
                                     </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Full Name</label>
+                                        <p class="text-gray-900 font-medium">{{ $appointment->walkin_customer_name ?? 'N/A' }}</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Phone Number</label>
+                                        <p class="text-gray-900">{{ $appointment->walkin_customer_phone ?? 'N/A' }}</p>
+                                    </div>
+                                    @if($appointment->walkin_customer_email)
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Email</label>
+                                        <p class="text-gray-900">{{ $appointment->walkin_customer_email }}</p>
+                                    </div>
+                                    @endif
                                 </div>
-                            </div>
+                                <!-- Hidden fields to preserve walk-in data -->
+                                <input type="hidden" name="is_walkin" value="1">
+                                <input type="hidden" name="walkin_customer_name" value="{{ $appointment->walkin_customer_name }}">
+                                <input type="hidden" name="walkin_customer_phone" value="{{ $appointment->walkin_customer_phone }}">
+                                <input type="hidden" name="walkin_customer_email" value="{{ $appointment->walkin_customer_email }}">
+                            @else
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Customer Type</label>
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                            Registered Client
+                                        </span>
+                                    </div>
+                                    @if($appointment->client)
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Client Name</label>
+                                        <p class="text-gray-900 font-medium">{{ $appointment->client->name ?? 'N/A' }}</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Email</label>
+                                        <p class="text-gray-900">{{ $appointment->client->email ?? 'N/A' }}</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Phone Number</label>
+                                        <p class="text-gray-900">{{ $appointment->client->mobile_number ?? 'N/A' }}</p>
+                                    </div>
+                                    @else
+                                    <div class="md:col-span-2">
+                                        <p class="text-gray-500 italic">Client information not available</p>
+                                    </div>
+                                    @endif
+                                </div>
+                                <!-- Hidden fields to preserve registered client data -->
+                                <input type="hidden" name="is_walkin" value="0">
+                                <input type="hidden" name="client_id" value="{{ $appointment->client_id }}">
+                            @endif
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                             <!-- Service Selection -->
                             <div>
@@ -175,10 +155,25 @@
                                 <label for="appointment_time" class="block text-sm font-medium text-gray-700 mb-2">
                                     Appointment Time <span class="text-red-500">*</span>
                                 </label>
+                                @php
+                                    // Format time to H:i format (remove seconds if present)
+                                    $timeValue = old('appointment_time', $appointment->appointment_time);
+                                    if ($timeValue) {
+                                        // If time has seconds (H:i:s), remove them
+                                        if (strlen($timeValue) > 5) {
+                                            $timeValue = substr($timeValue, 0, 5);
+                                        }
+                                        // Ensure it's in H:i format
+                                        $timeParts = explode(':', $timeValue);
+                                        if (count($timeParts) >= 2) {
+                                            $timeValue = sprintf('%02d:%02d', (int)$timeParts[0], (int)$timeParts[1]);
+                                        }
+                                    }
+                                @endphp
                                 <input type="time" 
                                        name="appointment_time" 
                                        id="appointment_time" 
-                                       value="{{ old('appointment_time', $appointment->appointment_time) }}"
+                                       value="{{ $timeValue }}"
                                        required 
                                        class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
                                 @error('appointment_time')
@@ -315,48 +310,6 @@
     </div>
 
     <script>
-        // Toggle between registered client and walk-in customer
-        function toggleCustomerType() {
-            const isWalkin = document.getElementById('walkinCustomer').checked;
-            const registeredSection = document.getElementById('registeredClientSection');
-            const walkinSection = document.getElementById('walkinCustomerSection');
-            const clientSelect = document.getElementById('client_id');
-            const appointmentDate = document.getElementById('appointment_date');
-            const today = new Date().toISOString().split('T')[0];
-            
-            if (isWalkin) {
-                registeredSection.style.display = 'none';
-                walkinSection.style.display = 'block';
-                clientSelect.removeAttribute('required');
-                clientSelect.value = '';
-                // Set date to today and disable for walk-in
-                appointmentDate.value = today;
-                appointmentDate.setAttribute('readonly', 'readonly');
-                appointmentDate.style.backgroundColor = '#f3f4f6';
-                appointmentDate.style.cursor = 'not-allowed';
-            } else {
-                registeredSection.style.display = 'block';
-                walkinSection.style.display = 'none';
-                clientSelect.setAttribute('required', 'required');
-                // Re-enable date field for registered clients
-                appointmentDate.removeAttribute('readonly');
-                appointmentDate.style.backgroundColor = '';
-                appointmentDate.style.cursor = '';
-            }
-        }
-
-        // Initialize date restriction if appointment is walk-in on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            const isWalkin = document.getElementById('walkinCustomer').checked;
-            if (isWalkin) {
-                const appointmentDate = document.getElementById('appointment_date');
-                const today = new Date().toISOString().split('T')[0];
-                appointmentDate.value = today;
-                appointmentDate.setAttribute('readonly', 'readonly');
-                appointmentDate.style.backgroundColor = '#f3f4f6';
-                appointmentDate.style.cursor = 'not-allowed';
-            }
-        });
         // Service selection handler
         document.getElementById('service_id').addEventListener('change', function() {
             const selectedOption = this.options[this.selectedIndex];

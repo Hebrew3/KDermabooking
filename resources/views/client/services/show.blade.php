@@ -47,7 +47,7 @@
                                 <div>
                                     <h1 class="text-3xl font-bold text-gray-900 mb-2">{{ $service->name }}</h1>
                                     @if($service->category)
-                                    <span class="bg-pink-100 text-pink-800 text-sm font-medium px-3 py-1 rounded-full">{{ ucfirst($service->category) }}</span>
+                                    <span class="bg-pink-100 text-pink-800 text-sm font-medium px-3 py-1 rounded-full">{{ $service->formatted_category }}</span>
                                     @endif
                                 </div>
                                 <div class="text-right">
@@ -77,7 +77,7 @@
                                 @if($service->category)
                                 <div class="bg-gray-50 rounded-lg p-4">
                                     <h3 class="font-semibold text-gray-900 mb-2">Category</h3>
-                                    <p class="text-gray-600">{{ ucfirst($service->category) }}</p>
+                                    <p class="text-gray-600">{{ $service->formatted_category }}</p>
                                 </div>
                                 @endif
                                 <div class="bg-gray-50 rounded-lg p-4">

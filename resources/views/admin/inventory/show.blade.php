@@ -341,6 +341,7 @@
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
             }
+
         })
         .then(response => response.json())
         .then(data => {
@@ -364,3 +365,4 @@
     });
 </script>
 </x-app-layout>
+

@@ -115,11 +115,8 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
                     <select name="category" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
                         <option value="">All Categories</option>
-                        @foreach($categories as $category)
-                            <option value="{{ $category }}" {{ request('category') == $category ? 'selected' : '' }}>
-                                {{ ucfirst($category) }}
-                            </option>
-                        @endforeach
+                        <option value="Treatment Products" {{ request('category') == 'Treatment Products' ? 'selected' : '' }}>Treatment Products</option>
+                        <option value="Aftercare Products" {{ request('category') == 'Aftercare Products' ? 'selected' : '' }}>Aftercare Products</option>
                     </select>
                 </div>
 
@@ -230,16 +227,44 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div class="flex items-center space-x-2">
-                                    <a href="{{ route('admin.inventory.show', $item) }}" class="text-blue-600 hover:text-blue-900">View</a>
-                                    <a href="{{ route('admin.inventory.edit', $item) }}" class="text-pink-600 hover:text-pink-900">Edit</a>
+                                    <!-- View Icon -->
+                                    <a href="{{ route('admin.inventory.show', $item) }}" 
+                                       class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-600 hover:text-blue-700 transition-colors duration-200" 
+                                       title="View Item">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                        </svg>
+                                    </a>
                                     
-                                    <!-- Toggle Status -->
+                                    <!-- Edit Icon -->
+                                    <a href="{{ route('admin.inventory.edit', $item) }}" 
+                                       class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-pink-100 hover:bg-pink-200 text-pink-600 hover:text-pink-700 transition-colors duration-200" 
+                                       title="Edit Item">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                        </svg>
+                                    </a>
+                                    
+                                    <!-- Toggle Status Icon -->
                                     <form method="POST" action="{{ route('admin.inventory.toggle-status', $item) }}" class="inline">
                                         @csrf
                                         @method('PATCH')
-                                        <button type="submit" class="text-sm {{ $item->is_active ? 'text-orange-600 hover:text-orange-800' : 'text-green-600 hover:text-green-800' }}" 
+                                        <button type="submit" 
+                                                class="inline-flex items-center justify-center w-8 h-8 rounded-lg {{ $item->is_active ? 'bg-orange-100 hover:bg-orange-200 text-orange-600 hover:text-orange-700' : 'bg-green-100 hover:bg-green-200 text-green-600 hover:text-green-700' }} transition-colors duration-200" 
+                                                title="{{ $item->is_active ? 'Deactivate Item' : 'Activate Item' }}"
                                                 onclick="return confirm('Are you sure you want to {{ $item->is_active ? 'deactivate' : 'activate' }} this item?')">
-                                            {{ $item->is_active ? 'Deactivate' : 'Activate' }}
+                                            @if($item->is_active)
+                                                <!-- Deactivate Icon (Power Off) -->
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                                                </svg>
+                                            @else
+                                                <!-- Activate Icon (Check Circle) -->
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                </svg>
+                                            @endif
                                         </button>
                                     </form>
                                 </div>

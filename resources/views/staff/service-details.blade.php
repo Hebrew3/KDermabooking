@@ -26,7 +26,7 @@
                     <div class="space-y-3">
                         <div>
                             <span class="text-sm font-medium text-gray-500">Category:</span>
-                            <span class="ml-2 text-sm text-gray-900">{{ $service->category ?? 'Uncategorized' }}</span>
+                            <span class="ml-2 text-sm text-gray-900">{{ $service->formatted_category ?? 'Uncategorized' }}</span>
                         </div>
                         <div>
                             <span class="text-sm font-medium text-gray-500">Duration:</span>

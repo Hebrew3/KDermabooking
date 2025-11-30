@@ -161,6 +161,9 @@
                                    name="mobile_number" 
                                    value="{{ old('mobile_number', $user->mobile_number) }}"
                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                                   maxlength="11" pattern="[0-9]{11}" inputmode="numeric"
+                                   placeholder="Enter 11-digit mobile number"
+                                   oninput="this.value = this.value.replace(/[^0-9]/g, '').substring(0, 11);"
                                    required>
                         </div>
                     </div>
@@ -184,7 +187,7 @@
                             <input type="date" 
                                    id="birth_date" 
                                    name="birth_date" 
-                                   value="{{ old('birth_date', $user->birth_date) }}"
+                                   value="{{ old('birth_date', $user->birth_date ? (\Carbon\Carbon::parse($user->birth_date)->format('Y-m-d')) : '') }}"
                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                                    required>
                         </div>

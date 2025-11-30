@@ -57,28 +57,10 @@
                             </label>
                             <select name="category" id="category" required class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
                                 <option value="">Select Category</option>
-                                @foreach($categories as $category)
-                                <option value="{{ $category }}" {{ old('category') == $category ? 'selected' : '' }}>
-                                    {{ ucfirst($category) }}
-                                </option>
-                                @endforeach
-                                <option value="skincare" {{ old('category') == 'skincare' ? 'selected' : '' }}>Skincare</option>
-                                <option value="equipment" {{ old('category') == 'equipment' ? 'selected' : '' }}>Equipment</option>
-                                <option value="supplies" {{ old('category') == 'supplies' ? 'selected' : '' }}>Supplies</option>
-                                <option value="tools" {{ old('category') == 'tools' ? 'selected' : '' }}>Tools</option>
-                                <option value="consumables" {{ old('category') == 'consumables' ? 'selected' : '' }}>Consumables</option>
+                                <option value="Treatment Products" {{ old('category') == 'Treatment Products' ? 'selected' : '' }}>Treatment Products</option>
+                                <option value="Aftercare Products" {{ old('category') == 'Aftercare Products' ? 'selected' : '' }}>Aftercare Products</option>
                             </select>
                             @error('category')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Brand -->
-                        <div>
-                            <label for="brand" class="block text-sm font-medium text-gray-700 mb-2">Brand</label>
-                            <input type="text" name="brand" id="brand" value="{{ old('brand') }}" 
-                                   class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
-                            @error('brand')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror
                         </div>
@@ -150,22 +132,18 @@
                             @enderror
                         </div>
 
-                        <!-- Unit (Packaging Type) -->
+                        <!-- Container -->
                         <div>
                             <label for="unit" class="block text-sm font-medium text-gray-700 mb-2">
-                                Unit (Packaging Type) <span class="text-red-500">*</span>
+                                Container <span class="text-red-500">*</span>
                             </label>
                             <select name="unit" id="unit" required class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
                                 <option value="piece" {{ old('unit', 'piece') == 'piece' ? 'selected' : '' }}>Piece</option>
-                                <option value="bottle" {{ old('unit') == 'bottle' ? 'selected' : '' }}>Bottle</option>
-                                <option value="box" {{ old('unit') == 'box' ? 'selected' : '' }}>Box</option>
-                                <option value="pack" {{ old('unit') == 'pack' ? 'selected' : '' }}>Pack</option>
-                                <option value="tube" {{ old('unit') == 'tube' ? 'selected' : '' }}>Tube</option>
                                 <option value="jar" {{ old('unit') == 'jar' ? 'selected' : '' }}>Jar</option>
-                                <option value="set" {{ old('unit') == 'set' ? 'selected' : '' }}>Set</option>
-                                <option value="mL" {{ old('unit') == 'mL' ? 'selected' : '' }}>mL</option>
+                                <option value="bottle" {{ old('unit') == 'bottle' ? 'selected' : '' }}>Bottle</option>
+                                <option value="tube" {{ old('unit') == 'tube' ? 'selected' : '' }}>Tube</option>
                             </select>
-                            <p class="mt-1 text-xs text-gray-500">The packaging type (e.g., Bottle, Box, Pack)</p>
+                            <p class="mt-1 text-xs text-gray-500">The container type (e.g., Bottle, Jar, Tube, Piece)</p>
                             @error('unit')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror
@@ -210,32 +188,6 @@
                             <p class="mt-1 text-xs text-gray-500">The actual quantity inside the container (e.g., 20 mL, 250 g, 1 L)</p>
                         </div>
 
-                        <!-- Volume per Container (for mL tracking) -->
-                        <div>
-                            <label for="volume_per_container" class="block text-sm font-medium text-gray-700 mb-2">
-                                Volume per Container (mL)
-                            </label>
-                            <input type="number" name="volume_per_container" id="volume_per_container" 
-                                   value="{{ old('volume_per_container') }}" 
-                                   step="0.01" min="0"
-                                   class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500"
-                                   placeholder="e.g., 20">
-                            <p class="mt-1 text-xs text-gray-500">Volume in mL per container/bottle (e.g., 20 mL per bottle). Leave empty if not using mL-based tracking.</p>
-                            @error('volume_per_container')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Supplier -->
-                        <div>
-                            <label for="supplier" class="block text-sm font-medium text-gray-700 mb-2">Supplier</label>
-                            <input type="text" name="supplier" id="supplier" value="{{ old('supplier') }}" 
-                                   class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
-                            @error('supplier')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
                         <!-- Expiry Date -->
                         <div>
                             <label for="expiry_date" class="block text-sm font-medium text-gray-700 mb-2">Expiry Date</label>
@@ -247,16 +199,6 @@
                             @enderror
                         </div>
 
-                        <!-- Storage Location -->
-                        <div>
-                            <label for="storage_location" class="block text-sm font-medium text-gray-700 mb-2">Storage Location</label>
-                            <input type="text" name="storage_location" id="storage_location" value="{{ old('storage_location') }}" 
-                                   placeholder="e.g., Shelf A1, Room 2, Refrigerator"
-                                   class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
-                            @error('storage_location')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
                     </div>
 
                     <!-- Description -->
@@ -266,17 +208,6 @@
                                   placeholder="Detailed description of the item..."
                                   class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">{{ old('description') }}</textarea>
                         @error('description')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <!-- Notes -->
-                    <div class="mt-6">
-                        <label for="notes" class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                        <textarea name="notes" id="notes" rows="3" 
-                                  placeholder="Additional notes or special instructions..."
-                                  class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">{{ old('notes') }}</textarea>
-                        @error('notes')
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                         @enderror
                     </div>

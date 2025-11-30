@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\InventoryItem;
 use App\Models\InventoryUsageLog;
+use App\Models\InventoryStockLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
@@ -81,28 +82,35 @@ class ActivityLogController extends Controller
             ? Carbon::createFromFormat('Y-m-d', $request->end_date)->endOfDay()
             : Carbon::now()->endOfDay();
 
-        // Base query for inventory items
-        $itemsQuery = InventoryItem::query();
+        // Get product filter
+        $productFilter = $request->filled('product_name') ? $request->product_name : null;
+        $categoryFilter = $request->filled('category') && $request->category !== 'all' ? $request->category : null;
 
-        // Filter by product name
-        if ($request->filled('product_name')) {
-            $itemsQuery->where('name', 'like', '%' . $request->product_name . '%')
-                      ->orWhere('sku', 'like', '%' . $request->product_name . '%');
-        }
-
-        // Filter by category
-        if ($request->filled('category') && $request->category !== 'all') {
-            $itemsQuery->where('category', $request->category);
-        }
-
-        // Get all inventory items
-        $items = $itemsQuery->orderBy('name')->get();
-
-        // Build usage logs query
-        $usageLogsQuery = InventoryUsageLog::query()
+        // Get usage logs (Used/Consumed activities)
+        $usageLogsQuery = InventoryUsageLog::with(['inventoryItem'])
             ->whereBetween('created_at', [$startDate, $endDate]);
 
-        // Filter by staff (via appointments)
+        // Get stock logs (Restock activities)
+        $stockLogsQuery = InventoryStockLog::with(['inventoryItem'])
+            ->whereBetween('created_at', [$startDate, $endDate]);
+
+        // Apply product filter
+        if ($productFilter) {
+            $productIds = InventoryItem::where('name', 'like', '%' . $productFilter . '%')
+                                       ->orWhere('sku', 'like', '%' . $productFilter . '%')
+                                       ->pluck('id');
+            $usageLogsQuery->whereIn('inventory_item_id', $productIds);
+            $stockLogsQuery->whereIn('inventory_item_id', $productIds);
+        }
+
+        // Apply category filter
+        if ($categoryFilter) {
+            $productIds = InventoryItem::where('category', $categoryFilter)->pluck('id');
+            $usageLogsQuery->whereIn('inventory_item_id', $productIds);
+            $stockLogsQuery->whereIn('inventory_item_id', $productIds);
+        }
+
+        // Filter by staff (via appointments) for usage logs
         if ($request->filled('staff_id') && $request->staff_id !== 'all') {
             $usageLogsQuery->whereHas('appointment', function($q) use ($request) {
                 $q->where('staff_id', $request->staff_id);
@@ -114,129 +122,82 @@ class ActivityLogController extends Controller
             $usageLogsQuery->where('usage_type', $request->usage_type);
         }
 
-        // Filter by product (if specified)
-        if ($request->filled('product_name')) {
-            $productIds = InventoryItem::where('name', 'like', '%' . $request->product_name . '%')
-                                       ->orWhere('sku', 'like', '%' . $request->product_name . '%')
-                                       ->pluck('id');
-            $usageLogsQuery->whereIn('inventory_item_id', $productIds);
+        // Get all logs
+        $usageLogs = $usageLogsQuery->get();
+        $stockLogs = $stockLogsQuery->get();
+
+        // Combine and format activities
+        $activities = collect();
+
+        // Add usage logs as "Used / Consumed" activities
+        foreach ($usageLogs as $log) {
+            $item = $log->inventoryItem;
+            if (!$item) continue;
+
+            $quantityChange = $item->usesMlTracking() 
+                ? (float) $log->volume_ml_deducted 
+                : (float) $log->quantity_deducted;
+
+            $activities->push([
+                'date' => $log->created_at,
+                'product_name' => $log->item_name ?? $item->name,
+                'product_sku' => $log->item_sku ?? $item->sku,
+                'activity' => 'Used / Consumed',
+                'beginning_stock' => (float) $log->stock_before,
+                'quantity_change' => -abs($quantityChange), // Negative for used
+                'updated_stock' => (float) $log->stock_after,
+                'unit' => $log->unit ?? ($item->usesMlTracking() ? 'mL' : $item->unit),
+            ]);
         }
 
-        // Get usage logs grouped by inventory item (eager load relationships)
-        $usageLogs = $usageLogsQuery->with(['appointment.staff', 'inventoryItem'])
-            ->get()
-            ->groupBy('inventory_item_id');
+        // Add stock logs as "Restock" or "Used / Consumed" activities
+        foreach ($stockLogs as $log) {
+            $item = $log->inventoryItem;
+            if (!$item) continue;
 
-        // Calculate stock data for each item
-        $stockData = [];
-        foreach ($items as $item) {
-            // Get beginning stock (stock at start of period)
-            // First, try to get the last usage log before the period starts
-            $lastUsageBeforePeriod = InventoryUsageLog::where('inventory_item_id', $item->id)
-                ->where('created_at', '<', $startDate)
-                ->orderBy('created_at', 'desc')
-                ->first();
-
-            if ($lastUsageBeforePeriod) {
-                // Use stock_after from the last usage before period
-                $beginningStock = $item->usesMlTracking() 
-                    ? (float) $lastUsageBeforePeriod->stock_after 
-                    : (float) $lastUsageBeforePeriod->stock_after;
-            } else {
-                // No usage before period, try to get first usage in period
-                $firstUsageInPeriod = InventoryUsageLog::where('inventory_item_id', $item->id)
-                    ->whereBetween('created_at', [$startDate, $endDate])
-                    ->orderBy('created_at', 'asc')
-                    ->first();
-
-                if ($firstUsageInPeriod) {
-                    // Use stock_before from first usage in period
-                    $beginningStock = $item->usesMlTracking() 
-                        ? (float) $firstUsageInPeriod->stock_before 
-                        : (float) $firstUsageInPeriod->stock_before;
-                } else {
-                    // No usage logs at all, use current stock
-                    $beginningStock = $item->usesMlTracking() 
-                        ? (float) ($item->total_volume_ml ?? 0) 
-                        : (int) ($item->current_stock ?? 0);
-                }
+            // Show restock activities (positive quantity_change)
+            if ($log->activity_type === 'restock' && $log->quantity_change > 0) {
+                $activities->push([
+                    'date' => $log->created_at,
+                    'product_name' => $item->name,
+                    'product_sku' => $item->sku,
+                    'activity' => 'Restock',
+                    'beginning_stock' => (float) $log->stock_before,
+                    'quantity_change' => (float) $log->quantity_change, // Positive for restock
+                    'updated_stock' => (float) $log->stock_after,
+                    'unit' => $log->unit ?? $item->unit,
+                ]);
             }
-
-            // Get usage logs for this item in the period
-            $itemUsageLogs = $usageLogs->get($item->id, collect());
-
-            // Calculate used/consumed
-            $used = 0;
-            if ($item->usesMlTracking()) {
-                $used = $itemUsageLogs->sum('volume_ml_deducted');
-            } else {
-                $used = $itemUsageLogs->sum('quantity_deducted');
+            // Show used/removed activities (negative quantity_change or activity_type is 'used')
+            elseif ($log->activity_type === 'used' && $log->quantity_change < 0) {
+                $activities->push([
+                    'date' => $log->created_at,
+                    'product_name' => $item->name,
+                    'product_sku' => $item->sku,
+                    'activity' => 'Used / Consumed',
+                    'beginning_stock' => (float) $log->stock_before,
+                    'quantity_change' => (float) $log->quantity_change, // Negative for used
+                    'updated_stock' => (float) $log->stock_after,
+                    'unit' => $log->unit ?? $item->unit,
+                ]);
             }
-
-            // Calculate remaining stock
-            $remainingStock = max(0, $beginningStock - $used);
-
-            // Get staff who used this item (for display)
-            $staffUsed = $itemUsageLogs->map(function($log) {
-                return $log->appointment ? $log->appointment->staff : null;
-            })->filter()->unique('id')->values();
-
-            // Get first and last usage dates (when stock was deducted)
-            $firstUsageDate = $itemUsageLogs->isNotEmpty() 
-                ? $itemUsageLogs->min('created_at') 
-                : null;
-            $lastUsageDate = $itemUsageLogs->isNotEmpty() 
-                ? $itemUsageLogs->max('created_at') 
-                : null;
-
-            // Get first and last stock addition dates from ActivityLog
-            $firstAddDate = null;
-            $lastAddDate = null;
-            
-            // Check ActivityLog for stock additions/updates in the period
-            // Look for patterns like "Stock added", "Stock updated", or item creation
-            $addActivityLogs = ActivityLog::where('module', 'inventory')
-                ->where(function($query) use ($item) {
-                    $query->where('description', 'like', '%Stock added%')
-                          ->orWhere('description', 'like', '%Stock updated%')
-                          ->orWhere('description', 'like', '%' . $item->name . '%')
-                          ->orWhere('description', 'like', '%' . $item->sku . '%');
-                })
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->orderBy('created_at', 'asc')
-                ->get();
-            
-            if ($addActivityLogs->isNotEmpty()) {
-                $firstAddDate = $addActivityLogs->first()->created_at;
-                $lastAddDate = $addActivityLogs->last()->created_at;
-            } else {
-                // If no activity logs, check if item was created in this period
-                if ($item->created_at && $item->created_at->between($startDate, $endDate)) {
-                    $firstAddDate = $item->created_at;
-                    $lastAddDate = $item->created_at;
-                } elseif ($item->created_at && $item->created_at->lt($startDate)) {
-                    // Item was created before period, check updated_at if it was updated in period
-                    if ($item->updated_at && $item->updated_at->between($startDate, $endDate)) {
-                        $firstAddDate = $item->updated_at;
-                        $lastAddDate = $item->updated_at;
-                    }
-                }
+            // Show adjusted activities (when stock is set to a specific value)
+            elseif ($log->activity_type === 'adjusted') {
+                $activities->push([
+                    'date' => $log->created_at,
+                    'product_name' => $item->name,
+                    'product_sku' => $item->sku,
+                    'activity' => $log->quantity_change > 0 ? 'Restock' : ($log->quantity_change < 0 ? 'Used / Consumed' : 'Adjusted'),
+                    'beginning_stock' => (float) $log->stock_before,
+                    'quantity_change' => (float) $log->quantity_change,
+                    'updated_stock' => (float) $log->stock_after,
+                    'unit' => $log->unit ?? $item->unit,
+                ]);
             }
-
-            $stockData[] = [
-                'item' => $item,
-                'beginning_stock' => $beginningStock,
-                'used' => $used,
-                'remaining_stock' => $remainingStock,
-                'usage_logs' => $itemUsageLogs,
-                'staff_used' => $staffUsed,
-                'unit' => $item->usesMlTracking() ? 'mL' : $item->unit,
-                'first_usage_date' => $firstUsageDate,
-                'last_usage_date' => $lastUsageDate,
-                'first_add_date' => $firstAddDate,
-                'last_add_date' => $lastAddDate,
-            ];
         }
+
+        // Sort by date (newest first)
+        $activities = $activities->sortByDesc('date')->values();
 
         // Get filter options
         $categories = InventoryItem::distinct()->pluck('category')->sort()->values();
@@ -248,7 +209,7 @@ class ActivityLogController extends Controller
         $usageTypes = InventoryUsageLog::distinct()->pluck('usage_type')->sort()->values();
 
         return view('admin.activity-logs.inventory-activity', compact(
-            'stockData',
+            'activities',
             'categories',
             'staffMembers',
             'usageTypes',

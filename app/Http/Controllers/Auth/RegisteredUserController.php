@@ -39,10 +39,13 @@ class RegisteredUserController extends Controller
             'gender' => ['required', 'in:male,female,other'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
-            'mobile_number' => ['required', 'string', 'max:20'],
+            'mobile_number' => ['required', 'string', 'regex:/^[0-9]{11}$/', 'size:11'],
             'address' => ['required', 'string', 'max:500'],
             'birth_date' => ['required', 'date', 'before:today'],
             'role' => ['nullable', 'in:admin,nurse,aesthetician,client'],
+        ], [
+            'mobile_number.regex' => 'Mobile number must be exactly 11 digits (numbers only).',
+            'mobile_number.size' => 'Mobile number must be exactly 11 digits.',
         ]);
 
         // Generate 6-digit verification code

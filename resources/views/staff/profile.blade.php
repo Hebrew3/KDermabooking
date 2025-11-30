@@ -34,6 +34,7 @@
             <form method="POST" action="{{ route('staff.profile.update') }}" class="space-y-6">
                 @csrf
                 @method('PATCH')
+                <input type="hidden" name="action" value="personal_info">
 
                 <!-- Name Fields -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -83,6 +84,9 @@
                                name="mobile_number" 
                                value="{{ old('mobile_number', $user->mobile_number) }}"
                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                               maxlength="11" pattern="[0-9]{11}" inputmode="numeric"
+                               placeholder="Enter 11-digit mobile number"
+                               oninput="this.value = this.value.replace(/[^0-9]/g, '').substring(0, 11);"
                                required>
                     </div>
                 </div>
@@ -150,6 +154,65 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Change Password Section -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mt-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-2">Change Password</h2>
+            <p class="text-sm text-gray-600 mb-6">Ensure your account is using a long, random password to stay secure.</p>
+
+            <form method="POST" action="{{ route('staff.profile.update') }}" class="space-y-6">
+                @csrf
+                @method('PATCH')
+                <input type="hidden" name="action" value="change_password">
+
+                <!-- Current Password -->
+                <div>
+                    <label for="current_password" class="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+                    <input type="password" 
+                           id="current_password" 
+                           name="current_password" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                           autocomplete="current-password"
+                           required>
+                    @error('current_password')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <!-- New Password -->
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                    <input type="password" 
+                           id="password" 
+                           name="password" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                           autocomplete="new-password"
+                           required>
+                    @error('password')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <!-- Confirm Password -->
+                <div>
+                    <label for="password_confirmation" class="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+                    <input type="password" 
+                           id="password_confirmation" 
+                           name="password_confirmation" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                           autocomplete="new-password"
+                           required>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="flex justify-end">
+                    <button type="submit" 
+                            class="bg-pink-500 hover:bg-pink-600 text-white px-6 py-2 rounded-lg font-medium transition-colors duration-200">
+                        Update Password
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

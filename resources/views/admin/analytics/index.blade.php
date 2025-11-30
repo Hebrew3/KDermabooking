@@ -297,6 +297,19 @@
                                 <p class="text-sm text-gray-600">Services completed by each staff member</p>
                             </div>
                         </div>
+                        <!-- Year and Month Filter Dropdowns -->
+                        <div class="flex items-center space-x-2">
+                            <select id="staffYearSelect" name="staff_year" class="px-4 py-2 border-2 {{ $staffYear ? 'border-green-500' : 'border-gray-300' }} rounded-lg bg-white text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm transition-all duration-200">
+                                @for($y = now()->year; $y >= now()->year - 5; $y--)
+                                    <option value="{{ $y }}" {{ $staffYear == $y ? 'selected' : '' }}>{{ $y }}</option>
+                                @endfor
+                            </select>
+                            <select id="staffMonthSelect" name="staff_month" class="px-4 py-2 border-2 {{ $staffMonth ? 'border-green-500' : 'border-gray-300' }} rounded-lg bg-white text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm transition-all duration-200">
+                                @for($m = 1; $m <= 12; $m++)
+                                    <option value="{{ $m }}" {{ $staffMonth == $m ? 'selected' : '' }}>{{ date('F', mktime(0, 0, 0, $m, 1)) }}</option>
+                                @endfor
+                            </select>
+                        </div>
                     </div>
                     <div class="bg-white rounded-xl p-4 shadow-inner border border-gray-100">
                         <div class="h-80">
@@ -470,11 +483,84 @@
 </style>
 
 <script>
+    // Helper function to build URL with all query parameters
+    function buildAnalyticsUrl(newParams) {
+        const url = new URL(window.location.href);
+        const params = new URLSearchParams(url.search);
+        
+        // Update or add new parameters
+        Object.keys(newParams).forEach(key => {
+            if (newParams[key] !== null && newParams[key] !== undefined) {
+                params.set(key, newParams[key]);
+            }
+        });
+        
+        return `{{ route('admin.analytics') }}?${params.toString()}`;
+    }
+
     // Handle period selection change
-    document.getElementById('periodSelect').addEventListener('change', function() {
+    const periodSelect = document.getElementById('periodSelect');
+    if (periodSelect) {
+        periodSelect.addEventListener('change', function() {
         const period = this.value;
-        window.location.href = `{{ route('admin.analytics') }}?period=${period}`;
+            const staffYear = document.getElementById('staffYearSelect')?.value || null;
+            const staffMonth = document.getElementById('staffMonthSelect')?.value || null;
+            const params = { period: period };
+            if (staffYear) params.staff_year = staffYear;
+            if (staffMonth) params.staff_month = staffMonth;
+            window.location.href = buildAnalyticsUrl(params);
+        });
+    }
+
+    // Handle staff year selection change
+    const staffYearSelect = document.getElementById('staffYearSelect');
+    if (staffYearSelect) {
+        staffYearSelect.addEventListener('change', function() {
+            const staffYear = this.value;
+            const staffMonth = document.getElementById('staffMonthSelect')?.value || null;
+            const period = document.getElementById('periodSelect')?.value || '30';
+            const year = new URLSearchParams(window.location.search).get('year') || null;
+            const month = new URLSearchParams(window.location.search).get('month') || null;
+            const product = new URLSearchParams(window.location.search).get('product') || null;
+            
+            const params = {
+                period: period,
+                staff_year: staffYear
+            };
+            
+            if (staffMonth) params.staff_month = staffMonth;
+            if (year) params.year = year;
+            if (month) params.month = month;
+            if (product) params.product = product;
+            
+            window.location.href = buildAnalyticsUrl(params);
+        });
+    }
+
+    // Handle staff month selection change
+    const staffMonthSelect = document.getElementById('staffMonthSelect');
+    if (staffMonthSelect) {
+        staffMonthSelect.addEventListener('change', function() {
+            const staffMonth = this.value;
+            const staffYear = document.getElementById('staffYearSelect')?.value || null;
+            const period = document.getElementById('periodSelect')?.value || '30';
+            const year = new URLSearchParams(window.location.search).get('year') || null;
+            const month = new URLSearchParams(window.location.search).get('month') || null;
+            const product = new URLSearchParams(window.location.search).get('product') || null;
+            
+            const params = {
+                period: period,
+                staff_month: staffMonth
+            };
+            
+            if (staffYear) params.staff_year = staffYear;
+            if (year) params.year = year;
+            if (month) params.month = month;
+            if (product) params.product = product;
+            
+            window.location.href = buildAnalyticsUrl(params);
     });
+    }
 
     // Staff Scheduling Chart (Bar Chart)
     const staffSchedulingCtx = document.getElementById('staffSchedulingChart').getContext('2d');

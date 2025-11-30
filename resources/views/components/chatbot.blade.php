@@ -258,7 +258,142 @@ class KDermaChatbot {
             this.handleBookingStep(message);
         } else if (this.currentFlow === 'product-inquiry') {
             this.handleProductInquiry(message);
+        } else {
+            // Try to get AI response from backend
+            this.getAIResponse(message);
         }
+    }
+
+    async getAIResponse(message) {
+        // Show typing indicator
+        this.showTypingIndicator();
+
+        try {
+            // Get conversation history
+            const history = this.getConversationHistory();
+
+            const response = await fetch('{{ route("chatbot.public.send") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: message,
+                    history: history
+                })
+            });
+
+            const data = await response.json();
+
+            this.hideTypingIndicator();
+
+            if (data.success) {
+                // Add AI response
+                this.addMessage(data.message, true);
+
+                // Show options if available
+                if (data.options && data.options.length > 0) {
+                    setTimeout(() => {
+                        this.showOptionsFromBackend(data.options);
+                    }, 500);
+                } else {
+                    // Show default options
+                    setTimeout(() => {
+                        this.showDefaultOptions();
+                    }, 500);
+                }
+            } else {
+                // Fallback to default response
+                this.addMessage("I'd be happy to help you! How can I assist you today?", true);
+                setTimeout(() => {
+                    this.showDefaultOptions();
+                }, 500);
+            }
+        } catch (error) {
+            console.error('Error getting AI response:', error);
+            this.hideTypingIndicator();
+            
+            // Fallback to default response
+            this.addMessage("I'd be happy to help you! How can I assist you today?", true);
+            setTimeout(() => {
+                this.showDefaultOptions();
+            }, 500);
+        }
+    }
+
+    getConversationHistory() {
+        const messages = this.chatMessages.querySelectorAll('.mb-3');
+        const history = [];
+        
+        messages.forEach(msg => {
+            const isBot = msg.classList.contains('text-left');
+            const text = msg.textContent.trim();
+            if (text) {
+                history.push({
+                    sender_type: isBot ? 'bot' : 'user',
+                    message: text
+                });
+            }
+        });
+        
+        // Keep only last 10 messages for context
+        return history.slice(-10);
+    }
+
+    showOptionsFromBackend(options) {
+        const formattedOptions = options.map(opt => {
+            let action;
+            
+            if (opt.url) {
+                action = () => {
+                    window.location.href = opt.url;
+                };
+            } else if (opt.action === 'skin_consultation') {
+                action = () => this.showSkinConsultation();
+            } else if (opt.action === 'book_appointment') {
+                action = () => this.showBooking();
+            } else if (opt.action === 'view_services') {
+                action = () => this.showServices();
+            } else if (opt.action === 'product_inquiry') {
+                action = () => this.showProductInquiry();
+            } else if (opt.action === 'main_menu') {
+                action = () => this.showMainMenu();
+            } else {
+                action = () => this.handleUserMessage(opt.text);
+            }
+
+            return {
+                text: opt.text,
+                icon: this.getIconForAction(opt.action),
+                action: action
+            };
+        });
+
+        this.showOptions(formattedOptions);
+    }
+
+    getIconForAction(action) {
+        const iconMap = {
+            'skin_consultation': 'consultation',
+            'book_appointment': 'calendar',
+            'view_services': 'services',
+            'product_inquiry': 'products',
+            'main_menu': 'back',
+            'login': 'user',
+            'signup': 'user'
+        };
+        return iconMap[action] || 'check';
+    }
+
+    showDefaultOptions() {
+        this.showOptions([
+            { text: 'Skin Consultation', icon: 'consultation', action: () => this.showSkinConsultation() },
+            { text: 'Book an Appointment', icon: 'calendar', action: () => this.showBooking() },
+            { text: 'View All Treatments', icon: 'services', action: () => this.showServices() },
+            { text: 'View Aftercare Products', icon: 'products', action: () => this.showProductInquiry() }
+        ]);
     }
 
     handleBookingStep(message) {

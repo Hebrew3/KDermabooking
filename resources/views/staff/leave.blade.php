@@ -18,7 +18,7 @@
                 <!-- Leave request form -->
                 <div class="bg-white rounded-xl shadow-sm p-6">
                     <h2 class="text-lg font-semibold text-gray-800 mb-4">Request Leave</h2>
-                    <form method="POST" action="{{ route('staff.leave.store') }}">
+                    <form method="POST" action="{{ route('staff.leave.store') }}" id="leaveRequestForm">
                         @csrf
 
                         <div class="space-y-4">
@@ -69,7 +69,7 @@
                         </div>
 
                         <div class="mt-6 flex justify-end">
-                            <button type="submit" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Submit Leave Request</button>
+                            <button type="submit" id="submitLeaveBtn" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Submit Leave Request</button>
                         </div>
                     </form>
                 </div>
@@ -114,4 +114,91 @@
             </div>
         </div>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('leaveRequestForm');
+            const submitBtn = document.getElementById('submitLeaveBtn');
+
+            if (form && submitBtn) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+
+                    // Get form values for display
+                    const date = document.querySelector('input[name="unavailable_date"]').value;
+                    const startTime = document.querySelector('input[name="start_time"]').value || 'All day';
+                    const endTime = document.querySelector('input[name="end_time"]').value || '';
+                    const reason = document.querySelector('select[name="reason"]').selectedOptions[0].text;
+                    const notes = document.querySelector('textarea[name="notes"]').value;
+
+                    // Format date for display
+                    const formattedDate = date ? new Date(date).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    }) : 'Not specified';
+
+                    // Format time range
+                    let timeRange = 'All day';
+                    if (startTime && endTime) {
+                        const start = new Date('2000-01-01T' + startTime).toLocaleTimeString('en-US', { 
+                            hour: 'numeric', 
+                            minute: '2-digit',
+                            hour12: true 
+                        });
+                        const end = new Date('2000-01-01T' + endTime).toLocaleTimeString('en-US', { 
+                            hour: 'numeric', 
+                            minute: '2-digit',
+                            hour12: true 
+                        });
+                        timeRange = `${start} - ${end}`;
+                    } else if (startTime) {
+                        const start = new Date('2000-01-01T' + startTime).toLocaleTimeString('en-US', { 
+                            hour: 'numeric', 
+                            minute: '2-digit',
+                            hour12: true 
+                        });
+                        timeRange = `From ${start}`;
+                    }
+
+                    // Build confirmation message
+                    let message = `<div class="text-left">
+                        <p class="mb-2"><strong>Date:</strong> ${formattedDate}</p>
+                        <p class="mb-2"><strong>Time:</strong> ${timeRange}</p>
+                        <p class="mb-2"><strong>Reason:</strong> ${reason}</p>`;
+                    
+                    if (notes) {
+                        message += `<p class="mb-2"><strong>Notes:</strong> ${notes}</p>`;
+                    }
+                    
+                    message += `<p class="mt-3 text-sm text-gray-600">Your request will be submitted for admin approval.</p></div>`;
+
+                    Swal.fire({
+                        title: 'Confirm Leave Request',
+                        html: message,
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonColor: '#ec4899',
+                        cancelButtonColor: '#6b7280',
+                        confirmButtonText: 'Yes, Submit Request',
+                        cancelButtonText: 'Cancel',
+                        reverseButtons: true,
+                        focusConfirm: false,
+                        customClass: {
+                            popup: 'text-left'
+                        }
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            // Show loading state
+                            submitBtn.disabled = true;
+                            submitBtn.innerHTML = '<span class="inline-block animate-spin mr-2">⏳</span> Submitting...';
+                            
+                            // Submit the form
+                            form.submit();
+                        }
+                    });
+                });
+            }
+        });
+    </script>
 </x-app-layout>

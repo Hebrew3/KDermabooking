@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\InventoryItem;
+use App\Models\InventoryUsageLog;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\User;
@@ -79,11 +80,34 @@ class PosController extends Controller
             foreach ($request->items as $item) {
                 $inventoryItem = InventoryItem::findOrFail($item['inventory_item_id']);
                 
-                if ($inventoryItem->current_stock < $item['quantity']) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => "Insufficient stock for {$inventoryItem->name}. Available: {$inventoryItem->current_stock}",
-                    ], 400);
+                // Check stock based on tracking type
+                if ($inventoryItem->usesMlTracking()) {
+                    // For mL-tracked items, check virtual stock (total_volume_ml)
+                    // Calculate volume needed: quantity * content_per_unit (converted to mL)
+                    $quantity = (int) $item['quantity'];
+                    $contentPerUnit = (float) ($inventoryItem->content_per_unit ?? 0);
+                    $contentUnit = $inventoryItem->content_unit ?? 'mL';
+                    
+                    // Convert content_per_unit to mL
+                    $contentPerUnitInMl = $this->convertContentToMl($contentPerUnit, $contentUnit);
+                    $volumeNeeded = $quantity * $contentPerUnitInMl;
+                    
+                    $availableVolume = (float) ($inventoryItem->total_volume_ml ?? 0);
+                    
+                    if ($availableVolume < $volumeNeeded) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Insufficient stock for {$inventoryItem->name}. Available: " . number_format($availableVolume, 2) . " mL, Required: " . number_format($volumeNeeded, 2) . " mL",
+                        ], 400);
+                    }
+                } else {
+                    // For quantity-based items, check current_stock
+                    if ($inventoryItem->current_stock < $item['quantity']) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Insufficient stock for {$inventoryItem->name}. Available: {$inventoryItem->current_stock} {$inventoryItem->unit}",
+                        ], 400);
+                    }
                 }
             }
 
@@ -126,8 +150,67 @@ class PosController extends Controller
                     'total' => $total,
                 ]);
 
-                // Reduce inventory stock
-                $inventoryItem->decrement('current_stock', $item['quantity']);
+                // Deduct from inventory based on tracking type
+                $quantity = (int) $item['quantity'];
+                $stockBefore = null;
+                $stockAfter = null;
+                $volumeDeducted = 0;
+                $quantityDeducted = 0;
+                
+                if ($inventoryItem->usesMlTracking()) {
+                    // For mL-tracked items, use virtual deduction
+                    $contentPerUnit = (float) ($inventoryItem->content_per_unit ?? 0);
+                    $contentUnit = $inventoryItem->content_unit ?? 'mL';
+                    
+                    // Convert content_per_unit to mL
+                    $contentPerUnitInMl = $this->convertContentToMl($contentPerUnit, $contentUnit);
+                    $volumeMl = $quantity * $contentPerUnitInMl;
+                    
+                    // Store stock before deduction
+                    $stockBefore = (float) ($inventoryItem->total_volume_ml ?? 0);
+                    
+                    // Deduct using virtual deduction system
+                    $success = $inventoryItem->deductVolumeMl($volumeMl);
+                    
+                    if ($success) {
+                        $inventoryItem->refresh();
+                        $stockAfter = (float) ($inventoryItem->total_volume_ml ?? 0);
+                        $volumeDeducted = $volumeMl;
+                        
+                        \Log::info("POS: Deducted {$volumeMl} mL of {$inventoryItem->name} (Sale #{$sale->id}). Remaining: {$stockAfter} mL");
+                    } else {
+                        \Log::warning("POS: Failed to deduct {$volumeMl} mL of {$inventoryItem->name} (Sale #{$sale->id})");
+                    }
+                } else {
+                    // For quantity-based items, deduct whole units
+                    $stockBefore = $inventoryItem->current_stock;
+                    
+                    // Deduct whole units
+                    $inventoryItem->decrement('current_stock', $quantity);
+                    $inventoryItem->refresh();
+                    
+                    $stockAfter = $inventoryItem->current_stock;
+                    $quantityDeducted = $quantity;
+                    
+                    \Log::info("POS: Deducted {$quantity} {$inventoryItem->unit} of {$inventoryItem->name} (Sale #{$sale->id}). Remaining: {$stockAfter}");
+                }
+                
+                // Create inventory usage log for POS sale
+                InventoryUsageLog::create([
+                    'appointment_id' => null, // POS sales don't have appointments
+                    'inventory_item_id' => $inventoryItem->id,
+                    'service_id' => null, // POS sales don't have services
+                    'item_name' => $inventoryItem->name,
+                    'item_sku' => $inventoryItem->sku,
+                    'usage_type' => 'pos',
+                    'quantity_deducted' => $quantityDeducted,
+                    'volume_ml_deducted' => $volumeDeducted,
+                    'stock_before' => $stockBefore,
+                    'stock_after' => $stockAfter,
+                    'unit' => $inventoryItem->usesMlTracking() ? 'mL' : $inventoryItem->unit,
+                    'is_ml_tracking' => $inventoryItem->usesMlTracking(),
+                    'notes' => "POS Sale #{$sale->sale_number} - Quantity: {$quantity}",
+                ]);
             }
 
             DB::commit();
@@ -401,5 +484,67 @@ class PosController extends Controller
         }
 
         return ['imported' => $imported, 'failed' => $failed, 'errors' => $errors];
+    }
+
+    /**
+     * Convert content_per_unit to mL based on the unit.
+     * 
+     * @param float $value The value to convert
+     * @param string $unit The unit of the value (mL, L, g, kg, oz, fl oz, etc.)
+     * @return float The value converted to mL
+     */
+    private function convertContentToMl(float $value, string $unit): float
+    {
+        $unit = strtolower(trim($unit));
+        
+        switch ($unit) {
+            case 'ml':
+            case 'milliliter':
+            case 'millilitre':
+                return $value;
+            
+            case 'l':
+            case 'liter':
+            case 'litre':
+                return $value * 1000; // 1 L = 1000 mL
+            
+            case 'fl oz':
+            case 'fluid ounce':
+            case 'fluid oz':
+                return $value * 29.5735; // 1 fl oz ≈ 29.5735 mL
+            
+            case 'oz':
+            case 'ounce':
+                // For weight (oz), we can't directly convert to mL without density
+                // Assume it's fluid ounce if not specified
+                return $value * 29.5735;
+            
+            case 'g':
+            case 'gram':
+            case 'grams':
+                // For weight, we can't directly convert to mL without density
+                // For water: 1g = 1mL, but for other substances it varies
+                // We'll assume 1g = 1mL as a reasonable default for most liquids
+                return $value;
+            
+            case 'kg':
+            case 'kilogram':
+            case 'kilograms':
+                // For weight, assume 1kg = 1000mL (for water-like density)
+                return $value * 1000;
+            
+            case 'pc':
+            case 'pcs':
+            case 'piece':
+            case 'pieces':
+                // For pieces, we can't convert to mL
+                // Return 0 to indicate conversion not possible
+                return 0;
+            
+            default:
+                // Unknown unit, assume it's already in mL
+                \Log::warning("Unknown unit '{$unit}' for content conversion in POS. Assuming mL.");
+                return $value;
+        }
     }
 }

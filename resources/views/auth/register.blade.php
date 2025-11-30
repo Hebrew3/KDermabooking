@@ -26,15 +26,32 @@
                     <div class="bg-white/80 backdrop-blur-md rounded-3xl shadow-2xl p-8 border border-pink-100">
                         <div class="space-y-8">
             <!-- Register Form -->
+            <!-- Session Status -->
+            <x-auth-session-status class="mb-6 p-4 bg-pink-50 border border-pink-200 rounded-lg text-pink-800"
+                :status="session('status')" />
 
-            <!-- Header Section -->
-            <div class="text-center">
-                <h2 class="text-3xl font-bold text-gray-900 mb-2">Create Account</h2>
-                <p class="text-gray-600">Join K-Derma today</p>
-            </div>
+            <!-- Error Messages -->
+            @if (session('error'))
+                <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+                    {{ session('error') }}
+                </div>
+            @endif
 
-            <form method="POST" action="{{ route('register') }}" class="space-y-6">
+            <!-- Success Messages -->
+            @if (session('success'))
+                <div class="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800">
+                    {{ session('success') }}
+                </div>
+            @endif
+
+            <form method="POST" action="{{ route('register') }}" class="space-y-6" id="registerForm">
                 @csrf
+
+                <!-- Header Section -->
+                <div class="text-center">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-2">Create Account</h2>
+                    <p class="text-gray-600">Join K-Derma today</p>
+                </div>
 
                 <!-- Personal Information Section -->
                 <div class="bg-white p-6 rounded-xl border border-pink-100 shadow-sm">
@@ -144,7 +161,9 @@
                             <x-text-input id="mobile_number"
                                 class="block w-full pl-10 pr-3 py-3 border border-pink-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-colors duration-200 bg-pink-50/50"
                                 type="tel" name="mobile_number" :value="old('mobile_number')" required autocomplete="tel"
-                                placeholder="Enter your mobile number" />
+                                maxlength="11" pattern="[0-9]{11}" inputmode="numeric"
+                                placeholder="Enter 11-digit mobile number"
+                                oninput="this.value = this.value.replace(/[^0-9]/g, '').substring(0, 11); validateMobileNumber(this);" />
                         </div>
                         <x-input-error :messages="$errors->get('mobile_number')" class="mt-2 text-rose-600 text-sm" />
                     </div>
@@ -229,14 +248,22 @@
 
                 <!-- Register Button -->
                 <div>
-                    <button type="submit"
+                    <button type="submit" id="registerButton"
                         class="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-pink-500 hover:bg-pink-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 transition-colors duration-200">
-                        <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg id="registerIcon" class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z">
                             </path>
                         </svg>
-                        {{ __('Create Account') }}
+                        <svg id="registerSpinner" class="hidden animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                            </path>
+                        </svg>
+                        <span id="registerButtonText">{{ __('Create Account') }}</span>
                     </button>
                 </div>
 
@@ -283,6 +310,53 @@
                     `;
                 }
             }
+
+            // Mobile number validation
+            function validateMobileNumber(input) {
+                const value = input.value.replace(/[^0-9]/g, '');
+                const errorMsg = input.parentElement.querySelector('.mobile-error');
+                
+                if (value.length > 11) {
+                    input.value = value.substring(0, 11);
+                }
+                
+                if (input.value.length > 0 && input.value.length !== 11) {
+                    if (!errorMsg) {
+                        const error = document.createElement('p');
+                        error.className = 'mobile-error text-red-500 text-xs mt-1';
+                        error.textContent = 'Mobile number must be exactly 11 digits.';
+                        input.parentElement.appendChild(error);
+                    }
+                    input.classList.add('border-red-500');
+                } else {
+                    if (errorMsg) {
+                        errorMsg.remove();
+                    }
+                    input.classList.remove('border-red-500');
+                }
+            }
+
+            // Register form submission
+            document.getElementById('registerForm').addEventListener('submit', function(e) {
+                const mobileInput = document.getElementById('mobile_number');
+                if (mobileInput.value.length !== 11) {
+                    e.preventDefault();
+                    alert('Mobile number must be exactly 11 digits.');
+                    mobileInput.focus();
+                    return false;
+                }
+                
+                const button = document.getElementById('registerButton');
+                const icon = document.getElementById('registerIcon');
+                const spinner = document.getElementById('registerSpinner');
+                const text = document.getElementById('registerButtonText');
+
+                // Disable button and show loading state
+                button.disabled = true;
+                icon.classList.add('hidden');
+                spinner.classList.remove('hidden');
+                text.textContent = 'Creating Account...';
+            });
         </script>
     </body>
 </html>

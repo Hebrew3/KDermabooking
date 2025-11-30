@@ -384,8 +384,14 @@
                         const startTime = unavailability.start_time || '00:00';
                         const endTime = unavailability.end_time || '23:59';
                         
-                        // Extract just the date part (YYYY-MM-DD) from the datetime string
-                        const dateOnly = unavailability.unavailable_date.split('T')[0];
+                        // Extract just the date part (YYYY-MM-DD) - handle both date and datetime formats
+                        let dateOnly = unavailability.unavailable_date;
+                        if (dateOnly.includes('T')) {
+                            dateOnly = dateOnly.split('T')[0];
+                        } else if (dateOnly.includes(' ')) {
+                            dateOnly = dateOnly.split(' ')[0];
+                        }
+                        // dateOnly should now be in YYYY-MM-DD format
                         
                         // Format reason for display
                         const reasonMap = {

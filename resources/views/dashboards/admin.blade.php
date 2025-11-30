@@ -92,20 +92,35 @@
             </div>
 
             <!-- Charts and Analytics -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <div class="grid grid-cols-1 lg:grid-cols-1 gap-8 mb-8">
                 <!-- Monthly Revenue Bar Chart -->
                 <div class="bg-white rounded-xl shadow-sm p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Monthly Revenue</h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Monthly Revenue</h3>
+                        <!-- Filters and Export -->
+                        <div class="flex items-center space-x-2">
+                            <a href="{{ route('admin.dashboard.export.monthly-revenue', request()->only(['revenue_year', 'revenue_month'])) }}" 
+                               class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200 flex items-center space-x-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                <span>Export CSV</span>
+                            </a>
+                            <select id="revenueYearSelect" name="revenue_year" class="px-4 py-2 border-2 {{ request()->get('revenue_year') ? 'border-pink-500' : 'border-gray-300' }} rounded-lg bg-white text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 shadow-sm transition-all duration-200">
+                                @for($y = now()->year; $y >= now()->year - 5; $y--)
+                                    <option value="{{ $y }}" {{ request()->get('revenue_year', now()->year) == $y ? 'selected' : '' }}>{{ $y }}</option>
+                                @endfor
+                            </select>
+                            <select id="revenueMonthSelect" name="revenue_month" class="px-4 py-2 border-2 {{ request()->get('revenue_month') ? 'border-pink-500' : 'border-gray-300' }} rounded-lg bg-white text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 shadow-sm transition-all duration-200">
+                                <option value="all" {{ request()->get('revenue_month') == 'all' || !request()->get('revenue_month') ? 'selected' : '' }}>All Months</option>
+                                @for($m = 1; $m <= 12; $m++)
+                                    <option value="{{ $m }}" {{ request()->get('revenue_month') == $m ? 'selected' : '' }}>{{ date('F', mktime(0, 0, 0, $m, 1)) }}</option>
+                                @endfor
+                            </select>
+                        </div>
+                    </div>
                     <div class="h-64">
                         <canvas id="revenueChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Appointment Status Doughnut Chart -->
-                <div class="bg-white rounded-xl shadow-sm p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Appointment Status Distribution</h3>
-                    <div class="h-64 flex items-center justify-center">
-                        <canvas id="statusChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -114,15 +129,38 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                 <!-- Staff Scheduling Analytics -->
                 <div class="bg-white rounded-xl shadow-sm p-6">
-                    <div class="flex items-center space-x-3 mb-4">
-                        <div class="h-10 w-10 bg-gradient-to-br from-pink-500 to-rose-500 rounded-lg flex items-center justify-center">
-                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                            </svg>
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-3">
+                            <div class="h-10 w-10 bg-gradient-to-br from-pink-500 to-rose-500 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Staff Scheduling Analytics</h3>
+                                <p class="text-sm text-gray-600">Services completed by each staff member</p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-800">Staff Scheduling Analytics</h3>
-                            <p class="text-sm text-gray-600">Services completed by each staff member</p>
+                        <!-- Year and Month Filter Dropdowns and Export -->
+                        <div class="flex items-center space-x-2">
+                            <a href="{{ route('admin.dashboard.export.staff-scheduling', request()->only(['staff_year', 'staff_month'])) }}" 
+                               class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200 flex items-center space-x-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                <span>Export CSV</span>
+                            </a>
+                            <select id="staffYearSelect" name="staff_year" class="px-4 py-2 border-2 {{ request()->get('staff_year') ? 'border-pink-500' : 'border-gray-300' }} rounded-lg bg-white text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 shadow-sm transition-all duration-200">
+                                @for($y = now()->year; $y >= now()->year - 5; $y--)
+                                    <option value="{{ $y }}" {{ request()->get('staff_year', now()->year) == $y ? 'selected' : '' }}>{{ $y }}</option>
+                                @endfor
+                            </select>
+                            <select id="staffMonthSelect" name="staff_month" class="px-4 py-2 border-2 {{ request()->get('staff_month') ? 'border-pink-500' : 'border-gray-300' }} rounded-lg bg-white text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 shadow-sm transition-all duration-200">
+                                <option value="all" {{ request()->get('staff_month') == 'all' || !request()->get('staff_month') ? 'selected' : '' }}>All Months</option>
+                                @for($m = 1; $m <= 12; $m++)
+                                    <option value="{{ $m }}" {{ request()->get('staff_month') == $m ? 'selected' : '' }}>{{ date('F', mktime(0, 0, 0, $m, 1)) }}</option>
+                                @endfor
+                            </select>
                         </div>
                     </div>
                     <div class="h-80">
@@ -132,15 +170,38 @@
 
                 <!-- Services Analytics -->
                 <div class="bg-white rounded-xl shadow-sm p-6">
-                    <div class="flex items-center space-x-3 mb-4">
-                        <div class="h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
-                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                            </svg>
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-3">
+                            <div class="h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Services Analytics</h3>
+                                <p class="text-sm text-gray-600">Service demand per month (All services with appointments)</p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-800">Services Analytics</h3>
-                            <p class="text-sm text-gray-600">Service demand per month (Top 5 services)</p>
+                        <!-- Year and Month Filter Dropdowns and Export -->
+                        <div class="flex items-center space-x-2">
+                            <a href="{{ route('admin.dashboard.export.services-analytics', request()->only(['services_year', 'services_month'])) }}" 
+                               class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200 flex items-center space-x-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                <span>Export CSV</span>
+                            </a>
+                            <select id="servicesYearSelect" name="services_year" class="px-4 py-2 border-2 {{ request()->get('services_year') ? 'border-pink-500' : 'border-gray-300' }} rounded-lg bg-white text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 shadow-sm transition-all duration-200">
+                                @for($y = now()->year; $y >= now()->year - 5; $y--)
+                                    <option value="{{ $y }}" {{ request()->get('services_year', now()->year) == $y ? 'selected' : '' }}>{{ $y }}</option>
+                                @endfor
+                            </select>
+                            <select id="servicesMonthSelect" name="services_month" class="px-4 py-2 border-2 {{ request()->get('services_month') ? 'border-pink-500' : 'border-gray-300' }} rounded-lg bg-white text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 shadow-sm transition-all duration-200">
+                                <option value="all" {{ request()->get('services_month') == 'all' || !request()->get('services_month') ? 'selected' : '' }}>All Months</option>
+                                @for($m = 1; $m <= 12; $m++)
+                                    <option value="{{ $m }}" {{ request()->get('services_month') == $m ? 'selected' : '' }}>{{ date('F', mktime(0, 0, 0, $m, 1)) }}</option>
+                                @endfor
+                            </select>
                         </div>
                     </div>
                     <div class="h-80">
@@ -163,8 +224,15 @@
                             <p class="text-sm text-gray-600">Top-selling products comparison</p>
                         </div>
                     </div>
-                    <!-- Filters -->
+                    <!-- Filters and Export -->
                     <div class="flex items-center space-x-3">
+                        <a href="{{ route('admin.dashboard.export.product-sales', request()->only(['year', 'month', 'product_id'])) }}" 
+                           class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200 flex items-center space-x-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <span>Export CSV</span>
+                        </a>
                         <select id="yearFilter" class="bg-white border-2 border-gray-300 rounded-lg px-4 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm transition-all duration-200">
                             @for($y = now()->year; $y >= now()->year - 5; $y--)
                                 <option value="{{ $y }}" {{ $year == $y ? 'selected' : '' }}>{{ $y }}</option>
@@ -178,14 +246,299 @@
                         </select>
                         <select id="productFilter" class="bg-white border-2 border-gray-300 rounded-lg px-4 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm transition-all duration-200 min-w-[200px]">
                             <option value="">All Products</option>
-                            @foreach($allProducts ?? [] as $prod)
-                                <option value="{{ $prod->id }}" {{ $productId == $prod->id ? 'selected' : '' }}>{{ $prod->name }}</option>
-                            @endforeach
+                            @if(isset($allProducts) && is_iterable($allProducts))
+                                @foreach($allProducts as $prod)
+                                    @if(isset($prod) && is_object($prod))
+                                        <option value="{{ $prod->id ?? '' }}" {{ isset($productId) && $productId == ($prod->id ?? null) ? 'selected' : '' }}>{{ $prod->name ?? '' }}</option>
+                                    @endif
+                                @endforeach
+                            @endif
                         </select>
                     </div>
                 </div>
                 <div class="h-80">
                     <canvas id="productSalesChart"></canvas>
+                    </div>
+                </div>
+
+            <!-- New Dashboard Sections -->
+            <div class="grid grid-cols-1 lg:grid-cols-1 gap-8 mb-8">
+                <!-- Appointment Status Pie Chart -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center space-x-3">
+                            <div class="h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Appointment Status</h3>
+                                <p class="text-sm text-gray-600">Current appointment breakdown</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="h-64 flex items-center justify-center">
+                        <canvas id="appointmentStatusPieChart"></canvas>
+                    </div>
+                    <!-- Status Legend with Percentages -->
+                    <div class="mt-6 space-y-2">
+                        @php
+                            $totalAppointments = array_sum($appointmentStatusData);
+                            $statusColors = [
+                                'pending' => ['bg' => 'bg-yellow-100', 'text' => 'text-yellow-800', 'border' => 'border-yellow-200'],
+                                'confirmed' => ['bg' => 'bg-green-100', 'text' => 'text-green-800', 'border' => 'border-green-200'],
+                                'in_progress' => ['bg' => 'bg-blue-100', 'text' => 'text-blue-800', 'border' => 'border-blue-200'],
+                                'completed' => ['bg' => 'bg-purple-100', 'text' => 'text-purple-800', 'border' => 'border-purple-200'],
+                                'cancelled' => ['bg' => 'bg-red-100', 'text' => 'text-red-800', 'border' => 'border-red-200'],
+                                'no_show' => ['bg' => 'bg-gray-100', 'text' => 'text-gray-800', 'border' => 'border-gray-200'],
+                            ];
+                        @endphp
+                        @foreach($appointmentStatusData as $status => $count)
+                            @php
+                                $percentage = $totalAppointments > 0 ? round(($count / $totalAppointments) * 100, 1) : 0;
+                                $colors = $statusColors[$status] ?? ['bg' => 'bg-gray-100', 'text' => 'text-gray-800', 'border' => 'border-gray-200'];
+                            @endphp
+                            <div class="flex items-center justify-between p-2 rounded-lg border {{ $colors['border'] }} {{ $colors['bg'] }}">
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-3 h-3 rounded-full {{ $colors['bg'] }} border {{ $colors['border'] }}"></div>
+                                    <span class="font-medium {{ $colors['text'] }}">{{ ucfirst(str_replace('_', ' ', $status)) }}</span>
+                                </div>
+                                <div class="flex items-center space-x-3">
+                                    <span class="text-sm font-medium {{ $colors['text'] }}">{{ $count }} appointments</span>
+                                    <span class="font-bold {{ $colors['text'] }}">{{ $percentage }}%</span>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Services by Revenue & Top Clients -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <!-- Top Services by Revenue -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center space-x-3">
+                            <div class="h-10 w-10 bg-gradient-to-br from-pink-500 to-rose-500 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Top Services by Revenue</h3>
+                                <p class="text-sm text-gray-600">Top earners by period</p>
+                            </div>
+                        </div>
+                        <!-- Year and Month Filter Dropdowns and Export -->
+                        <div class="flex items-center space-x-2">
+                            <a href="{{ route('admin.dashboard.export.top-services', request()->only(['services_revenue_year', 'services_revenue_month'])) }}" 
+                               class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200 flex items-center space-x-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                <span>Export CSV</span>
+                            </a>
+                            <select id="servicesRevenueYearSelect" name="services_revenue_year" class="px-4 py-2 border-2 {{ request()->get('services_revenue_year') ? 'border-pink-500' : 'border-gray-300' }} rounded-lg bg-white text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 shadow-sm transition-all duration-200">
+                                @for($y = now()->year; $y >= now()->year - 5; $y--)
+                                    <option value="{{ $y }}" {{ request()->get('services_revenue_year', now()->year) == $y ? 'selected' : '' }}>{{ $y }}</option>
+                                @endfor
+                            </select>
+                            <select id="servicesRevenueMonthSelect" name="services_revenue_month" class="px-4 py-2 border-2 {{ request()->get('services_revenue_month') ? 'border-pink-500' : 'border-gray-300' }} rounded-lg bg-white text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 shadow-sm transition-all duration-200">
+                                <option value="all" {{ request()->get('services_revenue_month') == 'all' || !request()->get('services_revenue_month') ? 'selected' : '' }}>All Months</option>
+                                @for($m = 1; $m <= 12; $m++)
+                                    <option value="{{ $m }}" {{ request()->get('services_revenue_month', now()->month) == $m ? 'selected' : '' }}>{{ date('F', mktime(0, 0, 0, $m, 1)) }}</option>
+                                @endfor
+                            </select>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        @forelse($topServicesByRevenue as $index => $service)
+                            <div class="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:bg-pink-50 transition-colors">
+                                <div class="flex items-center space-x-3">
+                                    <div class="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-rose-400 text-white font-bold text-sm">
+                                        {{ $index + 1 }}
+                                    </div>
+                                    <div>
+                                        <p class="font-medium text-gray-800">{{ $service->name }}</p>
+                                        <p class="text-sm text-gray-600">{{ $service->completed_count ?? 0 }} completed</p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-bold text-pink-600">₱{{ number_format($service->total_revenue ?? 0, 2) }}</p>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="text-center py-8">
+                                <p class="text-gray-500">No revenue data available</p>
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+
+                <!-- Top Clients -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center space-x-3">
+                            <div class="h-10 w-10 bg-gradient-to-br from-purple-500 to-violet-500 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Top Clients</h3>
+                                <p class="text-sm text-gray-600">Highest spending clients by period</p>
+                            </div>
+                        </div>
+                        <!-- Year and Month Filter Dropdowns and Export -->
+                        <div class="flex items-center space-x-2">
+                            <a href="{{ route('admin.dashboard.export.top-clients', request()->only(['clients_year', 'clients_month'])) }}" 
+                               class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200 flex items-center space-x-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                <span>Export CSV</span>
+                            </a>
+                            <select id="clientsYearSelect" name="clients_year" class="px-4 py-2 border-2 {{ request()->get('clients_year') ? 'border-purple-500' : 'border-gray-300' }} rounded-lg bg-white text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-sm transition-all duration-200">
+                                @for($y = now()->year; $y >= now()->year - 5; $y--)
+                                    <option value="{{ $y }}" {{ request()->get('clients_year', now()->year) == $y ? 'selected' : '' }}>{{ $y }}</option>
+                                @endfor
+                            </select>
+                            <select id="clientsMonthSelect" name="clients_month" class="px-4 py-2 border-2 {{ request()->get('clients_month') ? 'border-purple-500' : 'border-gray-300' }} rounded-lg bg-white text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-sm transition-all duration-200">
+                                <option value="all" {{ request()->get('clients_month') == 'all' || !request()->get('clients_month') ? 'selected' : '' }}>All Months</option>
+                                @for($m = 1; $m <= 12; $m++)
+                                    <option value="{{ $m }}" {{ request()->get('clients_month', now()->month) == $m ? 'selected' : '' }}>{{ date('F', mktime(0, 0, 0, $m, 1)) }}</option>
+                                @endfor
+                            </select>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        @forelse($topClients as $index => $client)
+                            <div class="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:bg-purple-50 transition-colors">
+                                <div class="flex items-center space-x-3">
+                                    <div class="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-violet-400 text-white font-bold text-sm">
+                                        {{ $index + 1 }}
+                                    </div>
+                                    <div>
+                                        <p class="font-medium text-gray-800">{{ $client->name }}</p>
+                                        <p class="text-sm text-gray-600">{{ $client->total_appointments ?? 0 }} appointments</p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-bold text-purple-600">₱{{ number_format($client->total_spent ?? 0, 2) }}</p>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="text-center py-8">
+                                <p class="text-gray-500">No client data available</p>
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inventory Overview & Reorder Alerts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <!-- Inventory Overview -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center space-x-3">
+                            <div class="h-10 w-10 bg-gradient-to-br from-orange-500 to-amber-500 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Inventory Overview</h3>
+                                <p class="text-sm text-gray-600">Current inventory status</p>
+                            </div>
+                        </div>
+                        <a href="{{ route('admin.inventory.index') }}" class="text-orange-600 text-sm font-medium hover:text-orange-800">View all</a>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="p-4 bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg border border-orange-200">
+                            <p class="text-sm text-gray-600 mb-1">Total Items</p>
+                            <p class="text-2xl font-bold text-orange-600">{{ $totalInventoryItems }}</p>
+                        </div>
+                        <div class="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                            <p class="text-sm text-gray-600 mb-1">Active Items</p>
+                            <p class="text-2xl font-bold text-green-600">{{ $activeInventoryItems }}</p>
+                        </div>
+                        <div class="p-4 bg-gradient-to-br from-red-50 to-rose-50 rounded-lg border border-red-200">
+                            <p class="text-sm text-gray-600 mb-1">Low Stock</p>
+                            <p class="text-2xl font-bold text-red-600">{{ $lowStockItems }}</p>
+                        </div>
+                        <div class="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                            <p class="text-sm text-gray-600 mb-1">Total Value</p>
+                            <p class="text-2xl font-bold text-blue-600">₱{{ number_format($totalInventoryValue, 2) }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reorder Alerts -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center space-x-3">
+                            <div class="h-10 w-10 bg-gradient-to-br from-red-500 to-rose-500 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Reorder Alerts</h3>
+                                <p class="text-sm text-gray-600">Items needing restock</p>
+                            </div>
+                        </div>
+                        @if($reorderAlerts->count() > 0)
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                {{ $reorderAlerts->count() }} alerts
+                            </span>
+                        @endif
+                    </div>
+                    <div class="space-y-3 max-h-96 overflow-y-auto">
+                        @forelse($reorderAlerts as $item)
+                            <div class="flex items-center justify-between p-4 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 transition-colors">
+                                <div class="flex-1">
+                                    <p class="font-medium text-gray-800">{{ $item->name }}</p>
+                                    <p class="text-sm text-gray-600">SKU: {{ $item->sku }}</p>
+                                    <div class="flex items-center space-x-4 mt-2">
+                                        <span class="text-xs text-red-600 font-medium">
+                                            Stock: {{ $item->current_stock }} {{ $item->unit ?? '' }}
+                                        </span>
+                                        <span class="text-xs text-gray-600">
+                                            Min: {{ $item->minimum_stock }} {{ $item->unit ?? '' }}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    @php
+                                        $stockPercentage = $item->minimum_stock > 0 ? ($item->current_stock / $item->minimum_stock) * 100 : 0;
+                                    @endphp
+                                    @if($stockPercentage <= 50)
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-600 text-white">
+                                            Critical
+                                        </span>
+                                    @elseif($stockPercentage <= 75)
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-600 text-white">
+                                            Low
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-600 text-white">
+                                            Warning
+                                        </span>
+                                    @endif
+                                </div>
+                            </div>
+                        @empty
+                            <div class="text-center py-8">
+                                <svg class="mx-auto h-12 w-12 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <h3 class="mt-2 text-sm font-medium text-gray-900">All items well stocked</h3>
+                                <p class="mt-1 text-sm text-gray-500">No reorder alerts at this time.</p>
+                            </div>
+                        @endforelse
+                    </div>
                 </div>
             </div>
 
@@ -297,31 +650,58 @@
         }
     });
 
-    // Appointment Status Doughnut Chart
-    const statusCtx = document.getElementById('statusChart').getContext('2d');
-    const statusChart = new Chart(statusCtx, {
-        type: 'doughnut',
+    // Appointment Status Pie Chart (for dashboard section)
+    @php
+        $totalAppointments = array_sum($appointmentStatusData);
+        $statusOrder = ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'];
+        $statusLabels = [];
+        $statusData = [];
+        $statusColors = [];
+        $statusPercentages = [];
+        
+        foreach ($statusOrder as $status) {
+            if (isset($appointmentStatusData[$status])) {
+                $statusLabels[] = ucfirst(str_replace('_', ' ', $status));
+                $statusData[] = $appointmentStatusData[$status];
+                $percentage = $totalAppointments > 0 ? round(($appointmentStatusData[$status] / $totalAppointments) * 100, 1) : 0;
+                $statusPercentages[] = $percentage;
+                
+                // Match colors with the legend
+                switch($status) {
+                    case 'pending':
+                        $statusColors[] = '#F59E0B'; // yellow
+                        break;
+                    case 'confirmed':
+                        $statusColors[] = '#10B981'; // green
+                        break;
+                    case 'in_progress':
+                        $statusColors[] = '#3B82F6'; // blue
+                        break;
+                    case 'completed':
+                        $statusColors[] = '#8B5CF6'; // purple
+                        break;
+                    case 'cancelled':
+                        $statusColors[] = '#EF4444'; // red
+                        break;
+                    case 'no_show':
+                        $statusColors[] = '#6B7280'; // gray
+                        break;
+                    default:
+                        $statusColors[] = '#9CA3AF'; // default gray
+                }
+            }
+        }
+    @endphp
+    const appointmentStatusPieCtx = document.getElementById('appointmentStatusPieChart').getContext('2d');
+    const appointmentStatusPieChart = new Chart(appointmentStatusPieCtx, {
+        type: 'pie',
         data: {
-            labels: [
-                @foreach($appointmentStatusData as $status => $count)
-                    '{{ ucfirst(str_replace('_', ' ', $status)) }}',
-                @endforeach
-            ],
+            labels: @json($statusLabels),
             datasets: [{
-                data: [
-                    @foreach($appointmentStatusData as $status => $count)
-                        {{ $count }},
-                    @endforeach
-                ],
-                backgroundColor: [
-                    '#10B981', // green - confirmed
-                    '#F59E0B', // yellow - pending
-                    '#3B82F6', // blue - in_progress
-                    '#8B5CF6', // purple - completed
-                    '#EF4444', // red - cancelled
-                    '#6B7280'  // gray - no_show
-                ],
-                borderWidth: 0,
+                data: @json($statusData),
+                backgroundColor: @json($statusColors),
+                borderColor: '#ffffff',
+                borderWidth: 2,
                 hoverBorderWidth: 3,
                 hoverBorderColor: '#ffffff'
             }]
@@ -331,17 +711,20 @@
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'bottom',
-                    labels: {
-                        padding: 20,
-                        usePointStyle: true,
-                        font: {
-                            size: 12
+                    display: false // Hide legend since we have custom legend below
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            return label + ': ' + value + ' (' + percentage + '%)';
                         }
                     }
                 }
-            },
-            cutout: '60%'
+            }
         }
     });
 
@@ -407,6 +790,65 @@
         services_completed: @json($staffSchedulingData['services_completed'])
     });
 
+    // Staff Scheduling Filter Handlers
+    const staffYearSelect = document.getElementById('staffYearSelect');
+    const staffMonthSelect = document.getElementById('staffMonthSelect');
+
+    // Helper function to build URL with all query parameters
+    function buildDashboardUrl(newParams) {
+        const url = new URL(window.location.href);
+        const params = new URLSearchParams(url.search);
+        
+        // Update or add new parameters
+        Object.keys(newParams).forEach(key => {
+            if (newParams[key] !== null && newParams[key] !== undefined) {
+                params.set(key, newParams[key]);
+            }
+        });
+        
+        return `{{ route('admin.dashboard') }}?${params.toString()}`;
+    }
+
+    // Handle year change
+    if (staffYearSelect) {
+        staffYearSelect.addEventListener('change', function() {
+            const year = this.value;
+            const month = staffMonthSelect?.value || 'all';
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            const params = { staff_year: year };
+            if (month) params.staff_month = month;
+            
+            // Preserve all other filters
+            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'year', 'month', 'product', 'services_revenue_year', 'services_revenue_month', 'clients_year', 'clients_month'].forEach(key => {
+                const value = urlParams.get(key);
+                if (value && !params[key]) params[key] = value;
+            });
+            
+            window.location.href = buildDashboardUrl(params);
+        });
+    }
+    
+    if (staffMonthSelect) {
+        staffMonthSelect.addEventListener('change', function() {
+            const month = this.value;
+            const year = staffYearSelect?.value || '{{ now()->year }}';
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            const params = { staff_month: month };
+            if (year) params.staff_year = year;
+            
+            // Preserve all other filters
+            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'year', 'month', 'product', 'services_revenue_year', 'services_revenue_month', 'clients_year', 'clients_month'].forEach(key => {
+                const value = urlParams.get(key);
+                if (value && !params[key]) params[key] = value;
+            });
+            
+            window.location.href = buildDashboardUrl(params);
+        });
+    }
+    
+
     // Services Monthly Analytics Chart
     let servicesMonthlyChart;
     const servicesMonthlyCtx = document.getElementById('servicesMonthlyChart').getContext('2d');
@@ -447,14 +889,14 @@
             data: {
                 labels: data.months,
                 datasets: servicesDatasets
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
                             padding: 15,
                             usePointStyle: true,
                             font: {
@@ -531,13 +973,13 @@
                         position: 'top',
                         labels: {
                             padding: 15,
-                            usePointStyle: true,
-                            font: {
-                                size: 12
-                            }
+                        usePointStyle: true,
+                        font: {
+                            size: 12
                         }
                     }
-                },
+                }
+            },
                 scales: {
                     x: {
                         stacked: false,
@@ -565,7 +1007,7 @@
     // Initialize Product Sales Chart with initial data
     updateProductSalesChartData(@json($productSalesData));
     
-    // Filter change handlers
+    // Filter change handlers for Product Sales
     const yearFilter = document.getElementById('yearFilter');
     const monthFilter = document.getElementById('monthFilter');
     const productFilter = document.getElementById('productFilter');
@@ -586,6 +1028,233 @@
         productFilter.addEventListener('change', function() {
             updateProductSalesChart();
         });
+    }
+    
+    // Filter change handlers for Services Analytics
+    const servicesYearSelect = document.getElementById('servicesYearSelect');
+    const servicesMonthSelect = document.getElementById('servicesMonthSelect');
+    
+    if (servicesYearSelect) {
+        servicesYearSelect.addEventListener('change', function() {
+            const servicesYear = this.value;
+            const servicesMonth = document.getElementById('servicesMonthSelect')?.value || null;
+            const staffYear = new URLSearchParams(window.location.search).get('staff_year') || null;
+            const staffMonth = new URLSearchParams(window.location.search).get('staff_month') || null;
+            const year = new URLSearchParams(window.location.search).get('year') || null;
+            const month = new URLSearchParams(window.location.search).get('month') || null;
+            const product = new URLSearchParams(window.location.search).get('product') || null;
+            
+            const params = { services_year: servicesYear };
+            if (servicesMonth) params.services_month = servicesMonth;
+            const revenueYear = new URLSearchParams(window.location.search).get('revenue_year') || null;
+            const revenueMonth = new URLSearchParams(window.location.search).get('revenue_month') || null;
+            if (revenueYear) params.revenue_year = revenueYear;
+            if (revenueMonth) params.revenue_month = revenueMonth;
+            if (staffYear) params.staff_year = staffYear;
+            if (staffMonth) params.staff_month = staffMonth;
+            if (year) params.year = year;
+            if (month) params.month = month;
+            if (product) params.product = product;
+            
+            window.location.href = buildDashboardUrl(params);
+        });
+    }
+    
+    if (servicesMonthSelect) {
+        servicesMonthSelect.addEventListener('change', function() {
+            const servicesMonth = this.value;
+            const servicesYear = document.getElementById('servicesYearSelect')?.value || null;
+            const staffYear = new URLSearchParams(window.location.search).get('staff_year') || null;
+            const staffMonth = new URLSearchParams(window.location.search).get('staff_month') || null;
+            const year = new URLSearchParams(window.location.search).get('year') || null;
+            const month = new URLSearchParams(window.location.search).get('month') || null;
+            const product = new URLSearchParams(window.location.search).get('product') || null;
+            
+            const params = { services_month: servicesMonth };
+            if (servicesYear) params.services_year = servicesYear;
+            const revenueYear = new URLSearchParams(window.location.search).get('revenue_year') || null;
+            const revenueMonth = new URLSearchParams(window.location.search).get('revenue_month') || null;
+            const servicesRevenueYear = new URLSearchParams(window.location.search).get('services_revenue_year') || null;
+            const servicesRevenueMonth = new URLSearchParams(window.location.search).get('services_revenue_month') || null;
+            const clientsYear = new URLSearchParams(window.location.search).get('clients_year') || null;
+            const clientsMonth = new URLSearchParams(window.location.search).get('clients_month') || null;
+            if (revenueYear) params.revenue_year = revenueYear;
+            if (revenueMonth) params.revenue_month = revenueMonth;
+            if (servicesRevenueYear) params.services_revenue_year = servicesRevenueYear;
+            if (servicesRevenueMonth) params.services_revenue_month = servicesRevenueMonth;
+            if (clientsYear) params.clients_year = clientsYear;
+            if (clientsMonth) params.clients_month = clientsMonth;
+            if (staffYear) params.staff_year = staffYear;
+            if (staffMonth) params.staff_month = staffMonth;
+            if (year) params.year = year;
+            if (month) params.month = month;
+            if (product) params.product = product;
+            
+            window.location.href = buildDashboardUrl(params);
+        });
+    }
+    
+    // Filter change handlers for Revenue Chart
+    const revenueYearSelect = document.getElementById('revenueYearSelect');
+    const revenueMonthSelect = document.getElementById('revenueMonthSelect');
+    
+    if (revenueYearSelect) {
+        revenueYearSelect.addEventListener('change', function() {
+            const revenueYear = this.value;
+            const revenueMonth = document.getElementById('revenueMonthSelect')?.value || null;
+            const servicesYear = new URLSearchParams(window.location.search).get('services_year') || null;
+            const servicesMonth = new URLSearchParams(window.location.search).get('services_month') || null;
+            const staffYear = new URLSearchParams(window.location.search).get('staff_year') || null;
+            const staffMonth = new URLSearchParams(window.location.search).get('staff_month') || null;
+            const year = new URLSearchParams(window.location.search).get('year') || null;
+            const month = new URLSearchParams(window.location.search).get('month') || null;
+            const product = new URLSearchParams(window.location.search).get('product') || null;
+            
+            const params = { revenue_year: revenueYear };
+            if (revenueMonth) params.revenue_month = revenueMonth;
+            if (servicesYear) params.services_year = servicesYear;
+            if (servicesMonth) params.services_month = servicesMonth;
+            if (staffYear) params.staff_year = staffYear;
+            if (staffMonth) params.staff_month = staffMonth;
+            if (year) params.year = year;
+            if (month) params.month = month;
+            if (product) params.product = product;
+            
+            window.location.href = buildDashboardUrl(params);
+        });
+    }
+    
+    if (revenueMonthSelect) {
+        revenueMonthSelect.addEventListener('change', function() {
+            const revenueMonth = this.value;
+            const revenueYear = document.getElementById('revenueYearSelect')?.value || null;
+            const servicesYear = new URLSearchParams(window.location.search).get('services_year') || null;
+            const servicesMonth = new URLSearchParams(window.location.search).get('services_month') || null;
+            const staffYear = new URLSearchParams(window.location.search).get('staff_year') || null;
+            const staffMonth = new URLSearchParams(window.location.search).get('staff_month') || null;
+            const year = new URLSearchParams(window.location.search).get('year') || null;
+            const month = new URLSearchParams(window.location.search).get('month') || null;
+            const product = new URLSearchParams(window.location.search).get('product') || null;
+            
+            const params = { revenue_month: revenueMonth };
+            if (revenueYear) params.revenue_year = revenueYear;
+            const servicesRevenueYear = new URLSearchParams(window.location.search).get('services_revenue_year') || null;
+            const servicesRevenueMonth = new URLSearchParams(window.location.search).get('services_revenue_month') || null;
+            const clientsYear = new URLSearchParams(window.location.search).get('clients_year') || null;
+            const clientsMonth = new URLSearchParams(window.location.search).get('clients_month') || null;
+            if (servicesRevenueYear) params.services_revenue_year = servicesRevenueYear;
+            if (servicesRevenueMonth) params.services_revenue_month = servicesRevenueMonth;
+            if (clientsYear) params.clients_year = clientsYear;
+            if (clientsMonth) params.clients_month = clientsMonth;
+            if (servicesYear) params.services_year = servicesYear;
+            if (servicesMonth) params.services_month = servicesMonth;
+            if (staffYear) params.staff_year = staffYear;
+            if (staffMonth) params.staff_month = staffMonth;
+            if (year) params.year = year;
+            if (month) params.month = month;
+            if (product) params.product = product;
+            
+            window.location.href = buildDashboardUrl(params);
+        });
+    }
+    
+    // Filter change handlers for Top Services by Revenue
+    const servicesRevenueYearSelect = document.getElementById('servicesRevenueYearSelect');
+    const servicesRevenueMonthSelect = document.getElementById('servicesRevenueMonthSelect');
+    
+    if (servicesRevenueYearSelect) {
+        servicesRevenueYearSelect.addEventListener('change', function() {
+            const servicesRevenueYear = this.value;
+            const servicesRevenueMonth = document.getElementById('servicesRevenueMonthSelect')?.value || null;
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            const params = { services_revenue_year: servicesRevenueYear };
+            if (servicesRevenueMonth) params.services_revenue_month = servicesRevenueMonth;
+            
+            // Preserve all other filters
+            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'staff_year', 'staff_month', 'year', 'month', 'product', 'clients_year', 'clients_month'].forEach(key => {
+                const value = urlParams.get(key);
+                if (value && !params[key]) params[key] = value;
+            });
+            
+            window.location.href = buildDashboardUrl(params);
+        });
+    }
+    
+    if (servicesRevenueMonthSelect) {
+        servicesRevenueMonthSelect.addEventListener('change', function() {
+            const servicesRevenueMonth = this.value;
+            const servicesRevenueYear = document.getElementById('servicesRevenueYearSelect')?.value || null;
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            const params = { services_revenue_month: servicesRevenueMonth };
+            if (servicesRevenueYear) params.services_revenue_year = servicesRevenueYear;
+            
+            // Preserve all other filters
+            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'staff_year', 'staff_month', 'year', 'month', 'product', 'clients_year', 'clients_month'].forEach(key => {
+                const value = urlParams.get(key);
+                if (value && !params[key]) params[key] = value;
+            });
+            
+            window.location.href = buildDashboardUrl(params);
+        });
+    }
+    
+    // Filter change handlers for Top Clients
+    const clientsYearSelect = document.getElementById('clientsYearSelect');
+    const clientsMonthSelect = document.getElementById('clientsMonthSelect');
+    
+    if (clientsYearSelect) {
+        clientsYearSelect.addEventListener('change', function() {
+            const clientsYear = this.value;
+            const clientsMonth = document.getElementById('clientsMonthSelect')?.value || null;
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            const params = { clients_year: clientsYear };
+            if (clientsMonth) params.clients_month = clientsMonth;
+            
+            // Preserve all other filters
+            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'staff_year', 'staff_month', 'year', 'month', 'product', 'services_revenue_year', 'services_revenue_month'].forEach(key => {
+                const value = urlParams.get(key);
+                if (value && !params[key]) params[key] = value;
+            });
+            
+            window.location.href = buildDashboardUrl(params);
+        });
+    }
+    
+    if (clientsMonthSelect) {
+        clientsMonthSelect.addEventListener('change', function() {
+            const clientsMonth = this.value;
+            const clientsYear = document.getElementById('clientsYearSelect')?.value || null;
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            const params = { clients_month: clientsMonth };
+            if (clientsYear) params.clients_year = clientsYear;
+            
+            // Preserve all other filters
+            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'staff_year', 'staff_month', 'year', 'month', 'product', 'services_revenue_year', 'services_revenue_month'].forEach(key => {
+                const value = urlParams.get(key);
+                if (value && !params[key]) params[key] = value;
+            });
+            
+            window.location.href = buildDashboardUrl(params);
+        });
+    }
+    
+    // Helper function to build dashboard URL with all query parameters
+    function buildDashboardUrl(newParams) {
+        const url = new URL(window.location.href);
+        const params = new URLSearchParams(url.search);
+        
+        // Update or add new parameters
+        Object.keys(newParams).forEach(key => {
+            if (newParams[key] !== null && newParams[key] !== undefined) {
+                params.set(key, newParams[key]);
+            }
+        });
+        
+        return window.location.pathname + '?' + params.toString();
     }
     
     // Function to update all analytics charts via AJAX
@@ -612,10 +1281,29 @@
         });
         
         try {
+            // Get all filter values from URL to preserve them
+            const urlParams = new URLSearchParams(window.location.search);
             const params = new URLSearchParams();
+            
+            // Product Sales filters
             if (year) params.append('year', year);
             if (month) params.append('month', month);
             if (product) params.append('product', product);
+            
+            // Preserve other filters
+            const revenueYear = urlParams.get('revenue_year');
+            const revenueMonth = urlParams.get('revenue_month');
+            const servicesYear = urlParams.get('services_year');
+            const servicesMonth = urlParams.get('services_month');
+            const staffYear = urlParams.get('staff_year');
+            const staffMonth = urlParams.get('staff_month');
+            
+            if (revenueYear) params.append('revenue_year', revenueYear);
+            if (revenueMonth) params.append('revenue_month', revenueMonth);
+            if (servicesYear) params.append('services_year', servicesYear);
+            if (servicesMonth) params.append('services_month', servicesMonth);
+            if (staffYear) params.append('staff_year', staffYear);
+            if (staffMonth) params.append('staff_month', staffMonth);
             
             const response = await fetch(`{{ route('admin.dashboard.analytics-data') }}?${params.toString()}`, {
                 method: 'GET',
@@ -626,10 +1314,23 @@
             });
             
             if (!response.ok) {
-                throw new Error('Failed to fetch analytics data');
+                const errorText = await response.text();
+                let errorMessage = 'Failed to fetch analytics data';
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.message || errorData.error || errorMessage;
+                } catch (e) {
+                    errorMessage = errorText || errorMessage;
+                }
+                throw new Error(errorMessage);
             }
             
             const data = await response.json();
+            
+            // Check if there's an error in the response
+            if (data.error) {
+                throw new Error(data.message || data.error);
+            }
             
             // Update Staff Scheduling Chart
             if (data.staff_scheduling) {
@@ -644,24 +1345,47 @@
             // Update Product Sales Chart
             if (data.product_sales) {
                 updateProductSalesChartData(data.product_sales);
+            } else {
+                // If no product sales data, show empty chart
+                updateProductSalesChartData([]);
             }
             
         } catch (error) {
             console.error('Error updating analytics:', error);
-            alert('Failed to update analytics. Please refresh the page.');
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack
+            });
+            alert('Failed to update analytics: ' + (error.message || 'Unknown error') + '. Please refresh the page.');
         }
     }
     
     function updateProductSalesChart() {
-        // Update URL without reloading
+        // Get all current filter values
         const year = document.getElementById('yearFilter')?.value || '';
         const month = document.getElementById('monthFilter')?.value || '';
         const product = document.getElementById('productFilter')?.value || '';
         
+        // Preserve other filters from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const revenueYear = urlParams.get('revenue_year') || '';
+        const revenueMonth = urlParams.get('revenue_month') || '';
+        const servicesYear = urlParams.get('services_year') || '';
+        const servicesMonth = urlParams.get('services_month') || '';
+        const staffYear = urlParams.get('staff_year') || '';
+        const staffMonth = urlParams.get('staff_month') || '';
+        
+        // Build params with all filters
         const params = new URLSearchParams();
         if (year) params.append('year', year);
         if (month) params.append('month', month);
         if (product) params.append('product', product);
+        if (revenueYear) params.append('revenue_year', revenueYear);
+        if (revenueMonth) params.append('revenue_month', revenueMonth);
+        if (servicesYear) params.append('services_year', servicesYear);
+        if (servicesMonth) params.append('services_month', servicesMonth);
+        if (staffYear) params.append('staff_year', staffYear);
+        if (staffMonth) params.append('staff_month', staffMonth);
         
         // Update URL without reload
         const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');

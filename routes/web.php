@@ -90,6 +90,9 @@ Route::get('/test-avatar', function () {
 // Contact form route
 Route::post('/contact', [\App\Http\Controllers\ContactController::class, 'sendMessage'])->name('contact.send');
 
+// Public chatbot endpoint (for homepage widget - no authentication required)
+Route::post('/chatbot/public/send', [\App\Http\Controllers\Client\ChatbotController::class, 'sendPublicMessage'])->name('chatbot.public.send');
+
 
 
 // Public appointment booking routes (using main layout, not client dashboard)
@@ -153,6 +156,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'admin'])->group(function () {
         Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
         Route::get('/dashboard/analytics-data', [AdminDashboardController::class, 'getAnalyticsData'])->name('dashboard.analytics-data');
+        Route::get('/dashboard/export/monthly-revenue', [AdminDashboardController::class, 'exportMonthlyRevenue'])->name('dashboard.export.monthly-revenue');
+        Route::get('/dashboard/export/staff-scheduling', [AdminDashboardController::class, 'exportStaffScheduling'])->name('dashboard.export.staff-scheduling');
+        Route::get('/dashboard/export/services-analytics', [AdminDashboardController::class, 'exportServicesAnalytics'])->name('dashboard.export.services-analytics');
+        Route::get('/dashboard/export/product-sales', [AdminDashboardController::class, 'exportProductSales'])->name('dashboard.export.product-sales');
+        Route::get('/dashboard/export/top-services', [AdminDashboardController::class, 'exportTopServicesByRevenue'])->name('dashboard.export.top-services');
+        Route::get('/dashboard/export/top-clients', [AdminDashboardController::class, 'exportTopClients'])->name('dashboard.export.top-clients');
 
         // User Management - Full CRUD Resource Routes
         Route::resource('users', UserController::class);
@@ -170,6 +179,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/appointments/{appointment}/status', [AdminAppointmentController::class, 'updateStatus'])->name('appointments.update-status');
         Route::post('/appointments/{appointment}/feedback-reply', [AdminAppointmentController::class, 'replyToFeedback'])->name('appointments.feedback-reply');
         Route::get('/appointments-calendar', [AdminAppointmentController::class, 'calendar'])->name('appointments.calendar');
+        Route::get('/available-staff', [ClientAppointmentController::class, 'getAvailableStaff'])->name('appointments.available-staff');
 
         // Inventory Management - Full CRUD Resource Routes
         Route::resource('inventory', InventoryController::class)->parameters(['inventory' => 'inventoryItem']);
@@ -223,6 +233,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/staff-schedule/{staff}', [\App\Http\Controllers\Admin\StaffScheduleController::class, 'update'])->name('staff-schedule.update');
         Route::post('/staff-schedule/weekend-coverage', [\App\Http\Controllers\Admin\StaffScheduleController::class, 'updateWeekendCoverage'])->name('staff-schedule.weekend-coverage');
         Route::get('/staff-availability', [\App\Http\Controllers\Admin\StaffScheduleController::class, 'getAvailability'])->name('staff-schedule.availability');
+        Route::get('/staff-time-slots', [\App\Http\Controllers\Admin\StaffScheduleController::class, 'timeSlotAvailability'])->name('staff-schedule.time-slots');
 
         // Staff Service Assignment Management
         Route::resource('staff-services', \App\Http\Controllers\Admin\StaffServiceController::class);
@@ -230,6 +241,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Staff Leave Approval
         Route::get('/staff-leave', [\App\Http\Controllers\Admin\StaffLeaveController::class, 'index'])->name('staff-leave.index');
+        Route::get('/staff-leave/pending-count', [\App\Http\Controllers\Admin\StaffLeaveController::class, 'pendingCount'])->name('staff-leave.pending-count');
         Route::post('/staff-leave/{leave}/approve', [\App\Http\Controllers\Admin\StaffLeaveController::class, 'approve'])->name('staff-leave.approve');
         Route::post('/staff-leave/{leave}/reject', [\App\Http\Controllers\Admin\StaffLeaveController::class, 'reject'])->name('staff-leave.reject');
     });

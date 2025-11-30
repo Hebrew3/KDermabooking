@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use App\Services\PHPMailerService;
 
 class ProfileController extends Controller
 {
@@ -87,6 +88,21 @@ class ProfileController extends Controller
      */
     public function updateStaff(Request $request): RedirectResponse
     {
+        $user = $request->user();
+        $action = $request->input('action', 'personal_info');
+
+        if ($action === 'change_password') {
+            return $this->updatePasswordForStaff($request);
+        } else {
+            return $this->updatePersonalInfoForStaff($request);
+        }
+    }
+
+    /**
+     * Update personal information for staff.
+     */
+    private function updatePersonalInfoForStaff(Request $request): RedirectResponse
+    {
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
@@ -100,7 +116,7 @@ class ProfileController extends Controller
                 'max:255',
                 Rule::unique('users')->ignore($request->user()->id),
             ],
-            'mobile_number' => ['required', 'string', 'max:20'],
+            'mobile_number' => ['required', 'string', 'regex:/^[0-9]{11}$/', 'size:11'],
             'address' => ['required', 'string', 'max:500'],
             'birth_date' => ['required', 'date', 'before:today'],
         ]);
@@ -115,6 +131,33 @@ class ProfileController extends Controller
         $user->save();
 
         return Redirect::route('staff.profile')->with('success', 'Profile updated successfully!');
+    }
+
+    /**
+     * Update password for staff.
+     */
+    private function updatePasswordForStaff(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'current_password'],
+            'password' => ['required', Password::defaults(), 'confirmed'],
+        ]);
+
+        $user = $request->user();
+        $user->password = Hash::make($validated['password']);
+        $user->save();
+
+        // Send password change notification email
+        try {
+            $phpMailerService = new PHPMailerService();
+            $userName = $user->first_name ? ($user->first_name . ' ' . $user->last_name) : null;
+            $phpMailerService->sendPasswordChangeEmail($user->email, $userName, 'staff');
+        } catch (\Exception $e) {
+            // Log error but don't fail the password update
+            \Log::error('Failed to send password change notification email to staff: ' . $e->getMessage());
+        }
+
+        return Redirect::route('staff.profile')->with('success', 'Password updated successfully!');
     }
 
     /**
@@ -194,7 +237,7 @@ class ProfileController extends Controller
                 'max:255',
                 Rule::unique('users')->ignore($request->user()->id),
             ],
-            'mobile_number' => ['required', 'string', 'max:20'],
+            'mobile_number' => ['required', 'string', 'regex:/^[0-9]{11}$/', 'size:11'],
             'address' => ['required', 'string', 'max:500'],
             'birth_date' => ['required', 'date', 'before:today'],
         ]);
@@ -224,6 +267,16 @@ class ProfileController extends Controller
         $user = $request->user();
         $user->password = Hash::make($validated['password']);
         $user->save();
+
+        // Send password change notification email
+        try {
+            $phpMailerService = new PHPMailerService();
+            $userName = $user->first_name ? ($user->first_name . ' ' . $user->last_name) : null;
+            $phpMailerService->sendPasswordChangeEmail($user->email, $userName, 'client');
+        } catch (\Exception $e) {
+            // Log error but don't fail the password update
+            \Log::error('Failed to send password change notification email to client: ' . $e->getMessage());
+        }
 
         return Redirect::route('client.profile')->with('success', 'Password updated successfully!');
     }

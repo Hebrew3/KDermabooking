@@ -9,6 +9,7 @@ use App\Models\Service;
 use App\Models\Appointment;
 use App\Models\User;
 use App\Models\InventoryItem;
+use App\Services\GeminiAIService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
@@ -58,8 +59,13 @@ class ChatbotController extends Controller
         // Update conversation activity
         $conversation->updateActivity();
 
-        // Generate bot response
-        $botResponse = $this->generateBotResponse($request->message, $conversation);
+        // Try to use Gemini AI first, fallback to rule-based if not available
+        $botResponse = $this->generateBotResponseWithAI($request->message, $conversation);
+        
+        // If AI didn't generate a response, use rule-based system
+        if (!$botResponse) {
+            $botResponse = $this->generateBotResponse($request->message, $conversation);
+        }
 
         return response()->json([
             'success' => true,
@@ -78,6 +84,137 @@ class ChatbotController extends Controller
                 'formatted_time' => $botResponse->formatted_time,
             ],
         ]);
+    }
+
+    /**
+     * Send a message from the public homepage chatbot (no authentication required).
+     */
+    public function sendPublicMessage(Request $request)
+    {
+        $request->validate([
+            'message' => 'required|string|max:1000',
+        ]);
+
+        // Try to use Gemini AI for public chatbot
+        $geminiService = new GeminiAIService();
+        
+        if ($geminiService->isEnabled()) {
+            try {
+                $context = [
+                    'conversation_history' => $request->get('history', []),
+                ];
+
+                $aiResponse = $geminiService->generateResponse($request->message, $context);
+
+                if ($aiResponse) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => $aiResponse,
+                        'type' => 'ai',
+                    ]);
+                }
+            } catch (\Exception $e) {
+                \Log::error('Gemini AI error in public chatbot', [
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        // Fallback to rule-based responses
+        $response = $this->generatePublicBotResponse($request->message);
+
+        return response()->json([
+            'success' => true,
+            'message' => $response['message'],
+            'options' => $response['options'] ?? [],
+            'type' => 'rule-based',
+        ]);
+    }
+
+    /**
+     * Generate rule-based response for public chatbot.
+     */
+    private function generatePublicBotResponse($userMessage)
+    {
+        $message = strtolower(trim($userMessage));
+
+        // Simple keyword matching for public chatbot
+        if ($this->containsKeywords($message, ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'start', 'menu'])) {
+            return [
+                'message' => "Hi gorgeous! 💖 Welcome to K Derma Beauty Clinic, your skin's best friend 💆‍♀️✨\n\n🕐 **We're open:** Monday - Sunday, 9:00 AM to 7:00 PM\n\nWould you like me to help you find the perfect treatment or product for your skin type?\n\nPlease choose below:\n\n1️⃣ Skin Consultation\n\n2️⃣ Book an Appointment\n\n3️⃣ View Services\n\n4️⃣ Product Inquiry",
+                'options' => [
+                    ['text' => '1️⃣ Skin Consultation', 'action' => 'skin_consultation'],
+                    ['text' => '2️⃣ Book an Appointment', 'action' => 'book_appointment'],
+                    ['text' => '3️⃣ View Services', 'action' => 'view_services'],
+                    ['text' => '4️⃣ Product Inquiry', 'action' => 'product_inquiry'],
+                ]
+            ];
+        } elseif ($this->containsKeywords($message, ['1', 'skin consultation', 'consultation', 'skin type'])) {
+            return [
+                'message' => "Let's find what's best for your skin! 💆‍♀️\n\nPlease tell me your skin type:\n\n👩‍🦰 1. Oily Skin\n\n👩‍🦱 2. Dry Skin\n\n👩‍🦳 3. Combination Skin\n\n👩 4. Sensitive Skin\n\n👨‍🦰 5. Acne-Prone Skin",
+                'options' => [
+                    ['text' => '👩‍🦰 Oily Skin', 'action' => 'oily_skin'],
+                    ['text' => '👩‍🦱 Dry Skin', 'action' => 'dry_skin'],
+                    ['text' => '👩‍🦳 Combination Skin', 'action' => 'combination_skin'],
+                    ['text' => '👩 Sensitive Skin', 'action' => 'sensitive_skin'],
+                    ['text' => '👨‍🦰 Acne-Prone Skin', 'action' => 'acne_prone_skin'],
+                ]
+            ];
+        } elseif ($this->containsKeywords($message, ['2', 'book', 'appointment', 'schedule', 'reserve'])) {
+            $loginUrl = route('login');
+            $registerUrl = route('register');
+            return [
+                'message' => "To book your appointment at K Derma Beauty Clinic, please login to your account! 📅\n\nDon't have an account yet? No problem! You can sign up for free and start booking right away. 🎉",
+                'options' => [
+                    ['text' => 'Login Now', 'action' => 'login', 'url' => $loginUrl],
+                    ['text' => 'Sign Up', 'action' => 'signup', 'url' => $registerUrl],
+                ]
+            ];
+        } elseif ($this->containsKeywords($message, ['3', 'view services', 'services', 'treatments'])) {
+            return [
+                'message' => "Our current Facial Services include:\n\n✨ **Complete Facial Treatments:**\n• Korean Facial w/ D.P\n• Celebrity Facial\n• Acne Facial w/ Acne Laser\n• Hollywood Facial\n• Neckcial w/ LED Light\n• Backcial w/ LED Light\n\n🌟 **Skin Glow w/ Facial & LED Light Treatments:**\n• BB Glow w/ Blush\n• Blockdoll Facial\n• Pico Glow Laser\n• Fractional CO2 Laser (Face)\n• Fractional CO2 Laser (Back)\n• Immortal Facial\n\nWould you like to book a session or know more about a specific service?",
+                'options' => [
+                    ['text' => 'Book an Appointment', 'action' => 'book_appointment'],
+                    ['text' => 'Back to Main Menu', 'action' => 'main_menu'],
+                ]
+            ];
+        } elseif ($this->containsKeywords($message, ['4', 'product', 'products', 'product inquiry'])) {
+            return [
+                'message' => "Hi po! 🧴 Here are our top K Derma Skincare Products:\n\n• Whitening Set\n• Acne Care Set\n• Hydration Set\n• Rejuvenating Set\n\nPlease type the product name to check its availability or price 💕",
+                'options' => [
+                    ['text' => 'Whitening Set', 'action' => 'product_whitening'],
+                    ['text' => 'Acne Care Set', 'action' => 'product_acne'],
+                    ['text' => 'Hydration Set', 'action' => 'product_hydration'],
+                    ['text' => 'Rejuvenating Set', 'action' => 'product_rejuvenating'],
+                ]
+            ];
+        } elseif ($this->containsKeywords($message, ['hours', 'open', 'time', 'when', 'closing', 'opening'])) {
+            return [
+                'message' => "K-Derma Clinic is open: 🕐\n\n**Operating Hours:** 9:00 AM to 7:00 PM\n**Days Open:** Monday - Sunday (7 days a week)\n\nWe're open every day from 9:00 AM to 7:00 PM to serve you better! Would you like to book an appointment?",
+                'options' => [
+                    ['text' => 'Book Appointment', 'action' => 'book_appointment'],
+                    ['text' => 'View Services', 'action' => 'view_services'],
+                ]
+            ];
+        } elseif ($this->containsKeywords($message, ['location', 'address', 'where'])) {
+            return [
+                'message' => "You can find us at: 📍\n\n**K-Derma Aesthetic Clinic**\n123 Beauty Street, Makati City\nMetro Manila, Philippines\n\nWe're easily accessible by public transport and have parking available. Need directions or want to book an appointment?",
+                'options' => [
+                    ['text' => 'Book Appointment', 'action' => 'book_appointment'],
+                ]
+            ];
+        } else {
+            // Default response - let AI handle it if enabled, otherwise show menu
+            return [
+                'message' => "I'd be happy to help you! 💖\n\nHow can I assist you today?",
+                'options' => [
+                    ['text' => '1️⃣ Skin Consultation', 'action' => 'skin_consultation'],
+                    ['text' => '2️⃣ Book an Appointment', 'action' => 'book_appointment'],
+                    ['text' => '3️⃣ View Services', 'action' => 'view_services'],
+                    ['text' => '4️⃣ Product Inquiry', 'action' => 'product_inquiry'],
+                ]
+            ];
+        }
     }
 
     /**
@@ -137,7 +274,79 @@ class ChatbotController extends Controller
     }
 
     /**
-     * Generate bot response based on user message.
+     * Generate bot response using Gemini AI (with fallback to rule-based).
+     */
+    private function generateBotResponseWithAI($userMessage, $conversation)
+    {
+        $geminiService = new GeminiAIService();
+        
+        // Check if Gemini AI is enabled
+        if (!$geminiService->isEnabled()) {
+            return null; // Fallback to rule-based
+        }
+
+        try {
+            // Get conversation history for context
+            $recentMessages = $conversation->recentMessages(10);
+            $conversationHistory = [];
+            
+            foreach ($recentMessages as $msg) {
+                $conversationHistory[] = [
+                    'sender_type' => $msg->sender_type,
+                    'message' => $msg->message,
+                ];
+            }
+
+            // Build context
+            $client = $conversation->client;
+            $context = [
+                'conversation_history' => $conversationHistory,
+                'user_name' => $client ? $client->first_name : null,
+                'user_appointments_count' => $client ? $client->clientAppointments()
+                    ->upcoming()
+                    ->whereIn('status', ['pending', 'confirmed'])
+                    ->count() : 0,
+            ];
+
+            // Get AI response
+            $aiResponse = $geminiService->generateResponse($userMessage, $context);
+
+            if ($aiResponse) {
+                // Create bot message with AI response
+                return ChatbotMessage::createBotMessage(
+                    $conversation->id,
+                    $aiResponse,
+                    'text',
+                    [
+                        'quick_replies' => $this->getDefaultQuickReplies()
+                    ]
+                );
+            }
+        } catch (\Exception $e) {
+            \Log::error('Gemini AI error in chatbot', [
+                'error' => $e->getMessage(),
+                'conversation_id' => $conversation->id
+            ]);
+        }
+
+        return null; // Fallback to rule-based
+    }
+
+    /**
+     * Get default quick replies for AI responses.
+     */
+    private function getDefaultQuickReplies()
+    {
+        return [
+            ['text' => '1️⃣ Skin Consultation', 'action' => 'skin_consultation'],
+            ['text' => '2️⃣ Book an Appointment', 'action' => 'book_appointment'],
+            ['text' => '3️⃣ View Services', 'action' => 'view_services'],
+            ['text' => '4️⃣ Product Inquiry', 'action' => 'product_inquiry'],
+        ];
+    }
+
+    /**
+     * Generate bot response based on user message (rule-based fallback).
      */
     private function generateBotResponse($userMessage, $conversation)
     {

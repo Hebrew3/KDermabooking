@@ -132,16 +132,17 @@
                 </div>
 
                 <!-- Enhanced Summary Cards -->
+                @if($activities && $activities->count() > 0)
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-6 print:hidden">
                     <div class="bg-white rounded-2xl shadow-lg border-2 border-blue-100 p-4 sm:p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
                         <div class="flex items-center justify-between">
                             <div class="flex-1">
-                                <p class="text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wide">Total Products</p>
-                                <p class="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-2">{{ count($stockData) }}</p>
+                                <p class="text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wide">Total Activities</p>
+                                <p class="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-2">{{ $activities->count() }}</p>
                             </div>
                             <div class="h-12 w-12 sm:h-14 sm:w-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
                                 <svg class="h-6 w-6 sm:h-7 sm:w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
                                 </svg>
                             </div>
                         </div>
@@ -149,9 +150,9 @@
                     <div class="bg-white rounded-2xl shadow-lg border-2 border-red-100 p-4 sm:p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
                         <div class="flex items-center justify-between">
                             <div class="flex-1">
-                                <p class="text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wide">Total Used</p>
+                                <p class="text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wide">Used / Consumed</p>
                                 <p class="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-2">
-                                    {{ number_format(collect($stockData)->sum('used'), 0) }}
+                                    {{ $activities->where('activity', 'Used / Consumed')->count() }}
                                 </p>
                             </div>
                             <div class="h-12 w-12 sm:h-14 sm:w-14 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -164,19 +165,20 @@
                     <div class="bg-white rounded-2xl shadow-lg border-2 border-green-100 p-4 sm:p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
                         <div class="flex items-center justify-between">
                             <div class="flex-1">
-                                <p class="text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wide">Total Remaining</p>
+                                <p class="text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wide">Restocks</p>
                                 <p class="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-2">
-                                    {{ number_format(collect($stockData)->sum('remaining_stock'), 0) }}
+                                    {{ $activities->where('activity', 'Restock')->count() }}
                                 </p>
                             </div>
                             <div class="h-12 w-12 sm:h-14 sm:w-14 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
                                 <svg class="h-6 w-6 sm:h-7 sm:w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                                 </svg>
                             </div>
                         </div>
                     </div>
                 </div>
+                @endif
 
                 <!-- Report Header for Print -->
                 <div class="hidden print:block mb-6">
@@ -190,7 +192,7 @@
                     <div class="px-4 sm:px-6 py-4 sm:py-5 border-b-2 border-gray-200 bg-gradient-to-r from-gray-50 to-white print:border-b-2">
                         <div class="flex items-center justify-between">
                             <div>
-                                <h2 class="text-xl sm:text-2xl font-extrabold text-gray-900">Stock Summary</h2>
+                                <h2 class="text-xl sm:text-2xl font-extrabold text-gray-900">Activity Log</h2>
                                 <p class="text-sm text-gray-600 mt-1">
                                     <span class="font-semibold">Period:</span> {{ $startDate->format('M d, Y') }} - {{ $endDate->format('M d, Y') }}
                                 </p>
@@ -198,136 +200,66 @@
                         </div>
                     </div>
 
-                    @if(count($stockData) > 0)
+                    @if($activities && $activities->count() > 0)
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gradient-to-r from-gray-50 to-gray-100 print:bg-gray-100">
                                 <tr>
-                                    <th class="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Product Name</th>
-                                    <th class="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">SKU</th>
-                                    <th class="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Category</th>
+                                    <th class="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Date</th>
+                                    <th class="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Product</th>
+                                    <th class="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Activity</th>
                                     <th class="px-4 sm:px-6 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Beginning Stock</th>
-                                    <th class="px-4 sm:px-6 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Used / Consumed</th>
-                                    <th class="px-4 sm:px-6 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Remaining Stock</th>
-                                    <th class="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Unit</th>
-                                    <th class="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Date Added</th>
-                                    <th class="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Date Deducted</th>
-                                    <th class="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider print:hidden">Staff Used</th>
+                                    <th class="px-4 sm:px-6 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Qty Change</th>
+                                    <th class="px-4 sm:px-6 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Updated Stock</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-100">
-                                @foreach($stockData as $data)
+                                @foreach($activities as $activity)
                                 <tr class="hover:bg-gradient-to-r hover:from-pink-50 hover:to-rose-50 transition-all duration-200 print:hover:bg-white">
                                     <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-                                        <div class="text-sm font-bold text-gray-900">{{ $data['item']->name }}</div>
+                                        <div class="text-sm font-semibold text-gray-900">
+                                            {{ \Carbon\Carbon::parse($activity['date'])->format('M d, Y') }}
+                                        </div>
+                                    </td>
+                                    <td class="px-4 sm:px-6 py-4">
+                                        <div class="text-sm font-bold text-gray-900">{{ $activity['product_name'] }}</div>
+                                        <div class="text-xs text-gray-500 font-mono">{{ $activity['product_sku'] }}</div>
                                     </td>
                                     <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-                                        <span class="text-sm font-mono text-gray-600 bg-gray-50 px-2 py-1 rounded-lg">{{ $data['item']->sku }}</span>
-                                    </td>
-                                    <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-                                        <span class="inline-flex px-3 py-1 text-xs font-bold rounded-full bg-gradient-to-r from-gray-100 to-gray-200 text-gray-800 border border-gray-300">
-                                            {{ $data['item']->category }}
+                                        <span class="inline-flex px-3 py-1 text-xs font-bold rounded-full {{ $activity['activity'] === 'Restock' ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-100 text-red-800 border border-red-300' }}">
+                                            {{ $activity['activity'] }}
                                         </span>
                                     </td>
                                     <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-right">
-                                        <span class="text-sm font-bold text-gray-900">{{ number_format($data['beginning_stock'], 0) }}</span>
+                                        <span class="text-sm font-semibold text-gray-700">
+                                            {{ number_format($activity['beginning_stock'], 0) }} {{ strtolower($activity['unit']) }}
+                                        </span>
                                     </td>
                                     <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-right">
-                                        @if($data['used'] > 0)
+                                        @if($activity['quantity_change'] < 0)
                                             <span class="inline-flex items-center px-2 py-1 text-sm font-bold text-red-700 bg-red-50 rounded-lg border border-red-200">
                                                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
                                                 </svg>
-                                                {{ number_format($data['used'], 0) }}
+                                                −{{ number_format(abs($activity['quantity_change']), 0) }}
                                             </span>
                                         @else
-                                            <span class="text-sm font-medium text-gray-400">0</span>
+                                            <span class="inline-flex items-center px-2 py-1 text-sm font-bold text-green-700 bg-green-50 rounded-lg border border-green-200">
+                                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                                </svg>
+                                                +{{ number_format($activity['quantity_change'], 0) }}
+                                            </span>
                                         @endif
                                     </td>
                                     <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-right">
-                                        <span class="inline-flex px-3 py-1.5 text-sm font-bold rounded-xl {{ $data['remaining_stock'] <= $data['item']->minimum_stock ? 'bg-gradient-to-r from-red-100 to-red-200 text-red-800 border-2 border-red-300' : 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 border-2 border-green-300' }}">
-                                            {{ number_format($data['remaining_stock'], 0) }}
+                                        <span class="text-sm font-bold text-gray-900">
+                                            {{ number_format($activity['updated_stock'], 0) }} {{ strtolower($activity['unit']) }}
                                         </span>
-                                    </td>
-                                    <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-                                        <span class="text-sm font-semibold text-gray-700 bg-gray-50 px-2 py-1 rounded-lg">{{ $data['unit'] }}</span>
-                                    </td>
-                                    <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-                                        @if($data['first_add_date'])
-                                            <div class="flex flex-col">
-                                                <div class="flex items-center space-x-1">
-                                                    <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                    </svg>
-                                                    <span class="font-bold text-green-700 text-sm">{{ $data['first_add_date']->format('M d, Y') }}</span>
-                                                </div>
-                                                @if($data['last_add_date'] && $data['last_add_date']->format('Y-m-d') !== $data['first_add_date']->format('Y-m-d'))
-                                                    <span class="text-xs text-gray-500 mt-0.5 ml-5">Last: {{ $data['last_add_date']->format('M d, Y') }}</span>
-                                                @endif
-                                                @if($data['first_add_date']->format('H:i') !== '00:00')
-                                                    <span class="text-xs text-gray-500 ml-5">{{ $data['first_add_date']->format('h:i A') }}</span>
-                                                @endif
-                                            </div>
-                                        @else
-                                            <span class="text-gray-400 italic text-sm">No additions</span>
-                                        @endif
-                                    </td>
-                                    <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
-                                        @if($data['first_usage_date'])
-                                            <div class="flex flex-col">
-                                                <div class="flex items-center space-x-1">
-                                                    <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                    </svg>
-                                                    <span class="font-bold text-red-700 text-sm">{{ $data['first_usage_date']->format('M d, Y') }}</span>
-                                                </div>
-                                                @if($data['last_usage_date'] && $data['last_usage_date']->format('Y-m-d') !== $data['first_usage_date']->format('Y-m-d'))
-                                                    <span class="text-xs text-gray-500 mt-0.5 ml-5">Last: {{ $data['last_usage_date']->format('M d, Y') }}</span>
-                                                @endif
-                                                @if($data['first_usage_date']->format('H:i') !== '00:00')
-                                                    <span class="text-xs text-gray-500 ml-5">{{ $data['first_usage_date']->format('h:i A') }}</span>
-                                                @endif
-                                            </div>
-                                        @else
-                                            <span class="text-gray-400 italic text-sm">No deductions</span>
-                                        @endif
-                                    </td>
-                                    <td class="px-4 sm:px-6 py-4 text-sm print:hidden">
-                                        @if($data['staff_used']->count() > 0)
-                                            <div class="flex flex-wrap gap-1.5">
-                                                @foreach($data['staff_used']->take(2) as $staff)
-                                                    <span class="inline-flex px-2.5 py-1 text-xs font-bold rounded-lg bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 border border-blue-300">
-                                                        {{ $staff->name }}
-                                                    </span>
-                                                @endforeach
-                                                @if($data['staff_used']->count() > 2)
-                                                    <span class="inline-flex px-2.5 py-1 text-xs font-bold rounded-lg bg-gray-100 text-gray-700 border border-gray-300">
-                                                        +{{ $data['staff_used']->count() - 2 }} more
-                                                    </span>
-                                                @endif
-                                            </div>
-                                        @else
-                                            <span class="text-gray-400">-</span>
-                                        @endif
                                     </td>
                                 </tr>
                                 @endforeach
                             </tbody>
-                            <tfoot class="bg-gradient-to-r from-gray-50 to-gray-100 print:bg-gray-100 font-bold border-t-2 border-gray-300">
-                                <tr>
-                                    <td colspan="3" class="px-4 sm:px-6 py-4 text-sm text-gray-900">Total</td>
-                                    <td class="px-4 sm:px-6 py-4 text-sm text-gray-900 text-right">
-                                        <span class="bg-gray-200 px-3 py-1 rounded-lg">{{ number_format(collect($stockData)->sum('beginning_stock'), 0) }}</span>
-                                    </td>
-                                    <td class="px-4 sm:px-6 py-4 text-sm text-red-700 text-right">
-                                        <span class="bg-red-100 px-3 py-1 rounded-lg border border-red-300">{{ number_format(collect($stockData)->sum('used'), 0) }}</span>
-                                    </td>
-                                    <td class="px-4 sm:px-6 py-4 text-sm text-gray-900 text-right">
-                                        <span class="bg-green-100 px-3 py-1 rounded-lg border border-green-300">{{ number_format(collect($stockData)->sum('remaining_stock'), 0) }}</span>
-                                    </td>
-                                    <td colspan="4" class="px-4 sm:px-6 py-4"></td>
-                                </tr>
-                            </tfoot>
                         </table>
                     </div>
                     @else
@@ -337,9 +269,9 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
                             </svg>
                         </div>
-                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">No inventory items found</h3>
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">No activity found</h3>
                         <p class="text-sm sm:text-base text-gray-600 max-w-md mx-auto">
-                            Try adjusting your filters to see more results or check if there are any inventory items in the system.
+                            Try adjusting your filters to see more results or check if there are any inventory activities in the selected period.
                         </p>
                     </div>
                     @endif

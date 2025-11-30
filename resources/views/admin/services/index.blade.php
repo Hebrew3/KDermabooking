@@ -79,9 +79,30 @@
                                     name="category"
                                     class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-200 bg-white">
                                 <option value="">All Categories</option>
+                                @php
+                                    $categoryMap = [
+                                        // New categories
+                                        'complete_facial' => 'Complete Facial',
+                                        'laser_hair_removal' => 'Laser Hair Removal',
+                                        'laser_skin_treatment' => 'Laser Skin Treatment',
+                                        'skin_peeling' => 'Skin Peeling',
+                                        'tightening_contouring' => 'Tightening and Contouring',
+                                        'mesolipo' => 'Mesolipo',
+                                        'gluta_drip' => 'Gluta Drip',
+                                        'waxing' => 'Waxing',
+                                        'pathologic_non_invasive' => 'Pathologic / Non-Invasive',
+                                        // Old categories (for backward compatibility)
+                                        'facial' => 'Complete Facial',
+                                        'laser' => 'Laser Skin Treatment',
+                                        'injection' => 'Mesolipo',
+                                        'peel' => 'Skin Peeling',
+                                        'consultation' => 'Pathologic / Non-Invasive',
+                                        'other' => 'Other',
+                                    ];
+                                @endphp
                                 @foreach($categories as $category)
                                     <option value="{{ $category }}" {{ request('category') === $category ? 'selected' : '' }}>
-                                        {{ ucfirst($category) }}
+                                        {{ $categoryMap[$category] ?? ucfirst(str_replace('_', ' ', $category)) }}
                                     </option>
                                 @endforeach
                             </select>
@@ -203,7 +224,7 @@
                                                 </svg>
                                                 <span>Category</span>
                                             </span>
-                                            <span class="px-2 py-1 bg-pink-100 text-pink-700 rounded-md text-xs font-semibold">{{ ucfirst($service->category) }}</span>
+                                            <span class="px-2 py-1 bg-pink-100 text-pink-700 rounded-md text-xs font-semibold">{{ $service->formatted_category }}</span>
                                         </div>
                                         <div class="flex items-center justify-between text-sm">
                                             <span class="text-gray-500 flex items-center space-x-1">

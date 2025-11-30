@@ -60,12 +60,15 @@
                                     name="category"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('category') border-red-500 @enderror">
                                 <option value="">Select Category</option>
-                                <option value="facial" {{ old('category', $service->category) === 'facial' ? 'selected' : '' }}>Facial Treatment</option>
-                                <option value="laser" {{ old('category', $service->category) === 'laser' ? 'selected' : '' }}>Laser Treatment</option>
-                                <option value="injection" {{ old('category', $service->category) === 'injection' ? 'selected' : '' }}>Injection Treatment</option>
-                                <option value="peel" {{ old('category', $service->category) === 'peel' ? 'selected' : '' }}>Chemical Peel</option>
-                                <option value="consultation" {{ old('category', $service->category) === 'consultation' ? 'selected' : '' }}>Consultation</option>
-                                <option value="other" {{ old('category', $service->category) === 'other' ? 'selected' : '' }}>Other</option>
+                                <option value="complete_facial" {{ old('category', $service->category) === 'complete_facial' ? 'selected' : '' }}>Complete Facial</option>
+                                <option value="laser_hair_removal" {{ old('category', $service->category) === 'laser_hair_removal' ? 'selected' : '' }}>Laser Hair Removal</option>
+                                <option value="laser_skin_treatment" {{ old('category', $service->category) === 'laser_skin_treatment' ? 'selected' : '' }}>Laser Skin Treatment</option>
+                                <option value="skin_peeling" {{ old('category', $service->category) === 'skin_peeling' ? 'selected' : '' }}>Skin Peeling</option>
+                                <option value="tightening_contouring" {{ old('category', $service->category) === 'tightening_contouring' ? 'selected' : '' }}>Tightening and Contouring</option>
+                                <option value="mesolipo" {{ old('category', $service->category) === 'mesolipo' ? 'selected' : '' }}>Mesolipo</option>
+                                <option value="gluta_drip" {{ old('category', $service->category) === 'gluta_drip' ? 'selected' : '' }}>Gluta Drip</option>
+                                <option value="waxing" {{ old('category', $service->category) === 'waxing' ? 'selected' : '' }}>Waxing</option>
+                                <option value="pathologic_non_invasive" {{ old('category', $service->category) === 'pathologic_non_invasive' ? 'selected' : '' }}>Pathologic / Non-Invasive</option>
                             </select>
                             @error('category')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -104,20 +107,6 @@
                             @enderror
                         </div>
 
-                        <!-- Sort Order -->
-                        <div>
-                            <label for="sort_order" class="block text-sm font-medium text-gray-700 mb-2">Sort Order</label>
-                            <input type="number"
-                                   id="sort_order"
-                                   name="sort_order"
-                                   value="{{ old('sort_order', $service->sort_order) }}"
-                                   min="0"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('sort_order') border-red-500 @enderror"
-                                   placeholder="0">
-                            @error('sort_order')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
                     </div>
 
                     <!-- Description -->
@@ -133,59 +122,28 @@
                         @enderror
                     </div>
 
-                    <!-- Short Description -->
-                    <div>
-                        <label for="short_description" class="block text-sm font-medium text-gray-700 mb-2">Short Description</label>
-                        <textarea id="short_description"
-                                  name="short_description"
-                                  rows="2"
-                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('short_description') border-red-500 @enderror"
-                                  placeholder="Brief description for cards and listings">{{ old('short_description', $service->short_description) }}</textarea>
-                        @error('short_description')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
                     <!-- Current Images -->
-                    @if($service->image || $service->gallery_images)
+                    @if($service->image)
                         <div class="space-y-4">
                             <h3 class="text-lg font-medium text-gray-700">Current Images</h3>
 
-                            @if($service->image)
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Main Image</label>
-                                    <div class="flex items-center space-x-4">
-                                        <img src="{{ $service->image_url }}"
-                                             alt="{{ $service->name }}"
-                                             class="w-32 h-32 object-cover rounded-lg">
-                                        <div>
-                                            <p class="text-sm text-gray-600">Current main image</p>
-                                            <p class="text-xs text-gray-500">Upload a new image to replace this one</p>
-                                        </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Main Image</label>
+                                <div class="flex items-center space-x-4">
+                                    <img src="{{ $service->image_url }}"
+                                         alt="{{ $service->name }}"
+                                         class="w-32 h-32 object-cover rounded-lg">
+                                    <div>
+                                        <p class="text-sm text-gray-600">Current main image</p>
+                                        <p class="text-xs text-gray-500">Upload a new image to replace this one</p>
                                     </div>
                                 </div>
-                            @endif
-
-                            @if($service->gallery_images && count($service->gallery_images) > 0)
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Gallery Images</label>
-                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        @foreach($service->gallery_image_urls as $index => $imageUrl)
-                                            <div class="relative">
-                                                <img src="{{ $imageUrl }}"
-                                                     alt="Gallery image {{ $index + 1 }}"
-                                                     class="w-full h-24 object-cover rounded-lg">
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                    <p class="text-xs text-gray-500 mt-2">Upload new images to replace the gallery</p>
-                                </div>
-                            @endif
+                            </div>
                         </div>
                     @endif
 
                     <!-- Images -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
                         <!-- Main Image -->
                         <div>
                             <label for="image" class="block text-sm font-medium text-gray-700 mb-2">Main Image</label>
@@ -199,36 +157,6 @@
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror
                         </div>
-
-                        <!-- Gallery Images -->
-                        <div>
-                            <label for="gallery_images" class="block text-sm font-medium text-gray-700 mb-2">Gallery Images</label>
-                            <input type="file"
-                                   id="gallery_images"
-                                   name="gallery_images[]"
-                                   accept="image/*"
-                                   multiple
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('gallery_images') border-red-500 @enderror">
-                            <p class="mt-1 text-sm text-gray-500">Up to 10 images. Leave empty to keep current gallery.</p>
-                            @error('gallery_images')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-                    </div>
-
-                    <!-- Tags -->
-                    <div>
-                        <label for="tags" class="block text-sm font-medium text-gray-700 mb-2">Tags</label>
-                        <input type="text"
-                               id="tags"
-                               name="tags"
-                               value="{{ old('tags', is_array($service->tags) ? implode(', ', $service->tags) : $service->tags) }}"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('tags') border-red-500 @enderror"
-                               placeholder="Enter tags separated by commas (e.g., facial, skincare, anti-aging)">
-                        <p class="mt-1 text-sm text-gray-500">Separate tags with commas for better searchability.</p>
-                        @error('tags')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
                     </div>
 
                     <!-- Linked Products -->
@@ -248,36 +176,6 @@
                             </svg>
                             <span>Add Product</span>
                         </button>
-                    </div>
-
-                    <!-- SEO Fields -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <!-- Meta Title -->
-                        <div>
-                            <label for="meta_title" class="block text-sm font-medium text-gray-700 mb-2">Meta Title</label>
-                            <input type="text"
-                                   id="meta_title"
-                                   name="meta_title"
-                                   value="{{ old('meta_title', $service->meta_title) }}"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('meta_title') border-red-500 @enderror"
-                                   placeholder="SEO title for search engines">
-                            @error('meta_title')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Meta Description -->
-                        <div>
-                            <label for="meta_description" class="block text-sm font-medium text-gray-700 mb-2">Meta Description</label>
-                            <textarea id="meta_description"
-                                      name="meta_description"
-                                      rows="3"
-                                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 @error('meta_description') border-red-500 @enderror"
-                                      placeholder="SEO description for search engines">{{ old('meta_description', $service->meta_description) }}</textarea>
-                            @error('meta_description')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
                     </div>
 
                     <!-- Status Options -->
@@ -362,11 +260,12 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
                     <input type="number" 
                            name="treatment_products[${productRowIndex}][quantity]" 
-                           value="${quantity}"
-                           min="1"
+                           value="${volumeUsedPerService ? 0 : quantity}"
+                           min="0"
                            step="1"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                           required>
+                           class="quantity-input w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${volumeUsedPerService ? 'bg-gray-100 cursor-not-allowed' : ''}"
+                           ${volumeUsedPerService ? 'readonly' : 'required'}>
+                    <p class="text-xs text-gray-500 mt-1">Auto-set to 0 when using mL</p>
                 </div>
                 <div class="w-32">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Volume Used (mL)</label>
@@ -375,8 +274,8 @@
                            value="${volumeUsedPerService}"
                            min="0"
                            step="0.01"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                           placeholder="e.g., 2">
+                           class="volume-input w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                           placeholder="e.g., 25">
                     <p class="text-xs text-gray-500 mt-1">Leave empty if not using mL</p>
                 </div>
                 <div class="flex items-end pt-6">
@@ -391,6 +290,37 @@
             `;
             
             container.appendChild(row);
+            
+            // Add event listeners for volume/quantity toggle
+            const volumeInput = row.querySelector('.volume-input');
+            const quantityInput = row.querySelector('.quantity-input');
+            
+            volumeInput.addEventListener('input', function() {
+                if (this.value && parseFloat(this.value) > 0) {
+                    // If volume is set, set quantity to 0 and disable it
+                    quantityInput.value = 0;
+                    quantityInput.classList.add('bg-gray-100', 'cursor-not-allowed');
+                    quantityInput.setAttribute('readonly', 'readonly');
+                    quantityInput.removeAttribute('required');
+                } else {
+                    // If volume is cleared, enable quantity
+                    quantityInput.classList.remove('bg-gray-100', 'cursor-not-allowed');
+                    quantityInput.removeAttribute('readonly');
+                    quantityInput.setAttribute('required', 'required');
+                    if (quantityInput.value == 0) {
+                        quantityInput.value = 1;
+                    }
+                }
+            });
+            
+            // Initialize state on load
+            if (volumeUsedPerService && parseFloat(volumeUsedPerService) > 0) {
+                quantityInput.value = 0;
+                quantityInput.classList.add('bg-gray-100', 'cursor-not-allowed');
+                quantityInput.setAttribute('readonly', 'readonly');
+                quantityInput.removeAttribute('required');
+            }
+            
             productRowIndex++;
         }
 

@@ -8,7 +8,7 @@
         <div class="mb-8">
             <div class="flex justify-between items-center">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-900">Sales & Analytics</h1>
+                    <h1 class="text-3xl font-bold text-gray-900">Sales Analytics</h1>
                     <p class="text-gray-600 mt-2">View sales history and detailed analytics</p>
                 </div>
                 <div class="flex space-x-3">

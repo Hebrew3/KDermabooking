@@ -42,8 +42,6 @@ class ServiceRequest extends FormRequest
             'is_active' => ['boolean'],
             'is_featured' => ['boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
-            'meta_title' => ['nullable', 'string', 'max:255'],
-            'meta_description' => ['nullable', 'string', 'max:500'],
             'tags' => ['nullable', 'string', 'max:1000'],
         ];
     }
@@ -80,8 +78,6 @@ class ServiceRequest extends FormRequest
             'gallery_images.*.max' => 'Each gallery image must not be larger than 5MB.',
             'sort_order.integer' => 'Sort order must be a whole number.',
             'sort_order.min' => 'Sort order must be at least 0.',
-            'meta_title.max' => 'Meta title must not exceed 255 characters.',
-            'meta_description.max' => 'Meta description must not exceed 500 characters.',
             'tags.max' => 'Tags must not exceed 1000 characters.',
         ];
     }

@@ -107,12 +107,23 @@ class ServiceController extends Controller
         if ($request->has('treatment_products')) {
             $treatmentProducts = [];
             foreach ($request->treatment_products as $product) {
-                if (isset($product['product_id']) && isset($product['quantity']) && !empty($product['product_id']) && $product['quantity'] > 0) {
-                    $pivotData = ['quantity' => (float)$product['quantity']]; // Support decimal quantities
-                    if (isset($product['volume_used_per_service']) && $product['volume_used_per_service'] !== '' && $product['volume_used_per_service'] !== null) {
-                        $pivotData['volume_used_per_service'] = (float)$product['volume_used_per_service'];
+                if (isset($product['product_id']) && !empty($product['product_id'])) {
+                    $hasVolumeUsed = isset($product['volume_used_per_service']) && $product['volume_used_per_service'] !== '' && $product['volume_used_per_service'] !== null && (float)$product['volume_used_per_service'] > 0;
+                    $hasQuantity = isset($product['quantity']) && (float)$product['quantity'] > 0;
+                    
+                    // Only add if either volume_used_per_service or quantity is set
+                    if ($hasVolumeUsed || $hasQuantity) {
+                        // If volume_used_per_service is set, quantity should be 0
+                        $pivotData = [
+                            'quantity' => $hasVolumeUsed ? 0 : (float)$product['quantity']
+                        ];
+                        
+                        if ($hasVolumeUsed) {
+                            $pivotData['volume_used_per_service'] = (float)$product['volume_used_per_service'];
+                        }
+                        
+                        $treatmentProducts[$product['product_id']] = $pivotData;
                     }
-                    $treatmentProducts[$product['product_id']] = $pivotData;
                 }
             }
             $service->treatmentProducts()->sync($treatmentProducts);
@@ -197,12 +208,23 @@ class ServiceController extends Controller
         if ($request->has('treatment_products')) {
             $treatmentProducts = [];
             foreach ($request->treatment_products as $product) {
-                if (isset($product['product_id']) && isset($product['quantity']) && !empty($product['product_id']) && $product['quantity'] > 0) {
-                    $pivotData = ['quantity' => (float)$product['quantity']]; // Support decimal quantities
-                    if (isset($product['volume_used_per_service']) && $product['volume_used_per_service'] !== '' && $product['volume_used_per_service'] !== null) {
-                        $pivotData['volume_used_per_service'] = (float)$product['volume_used_per_service'];
+                if (isset($product['product_id']) && !empty($product['product_id'])) {
+                    $hasVolumeUsed = isset($product['volume_used_per_service']) && $product['volume_used_per_service'] !== '' && $product['volume_used_per_service'] !== null && (float)$product['volume_used_per_service'] > 0;
+                    $hasQuantity = isset($product['quantity']) && (float)$product['quantity'] > 0;
+                    
+                    // Only add if either volume_used_per_service or quantity is set
+                    if ($hasVolumeUsed || $hasQuantity) {
+                        // If volume_used_per_service is set, quantity should be 0
+                        $pivotData = [
+                            'quantity' => $hasVolumeUsed ? 0 : (float)$product['quantity']
+                        ];
+                        
+                        if ($hasVolumeUsed) {
+                            $pivotData['volume_used_per_service'] = (float)$product['volume_used_per_service'];
+                        }
+                        
+                        $treatmentProducts[$product['product_id']] = $pivotData;
                     }
-                    $treatmentProducts[$product['product_id']] = $pivotData;
                 }
             }
             $service->treatmentProducts()->sync($treatmentProducts);

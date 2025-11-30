@@ -29,7 +29,7 @@
                     <form method="POST" action="{{ route('client.appointments.store') }}" id="appointmentForm">
                         @csrf
 
-                        <!-- Date Selection -->
+                        <!-- Date Selection (Required but shown first) -->
                         <div class="mb-6">
                             <label for="appointment_date" class="block text-sm font-medium text-gray-700 mb-2">
                                 Appointment Date <span class="text-red-500">*</span>
@@ -42,11 +42,14 @@
                             @enderror
                         </div>
 
-                        <!-- Service Selection -->
+                        <!-- Step 1: Service Selection -->
                         <div class="mb-6">
-                            <label for="service_id" class="block text-sm font-medium text-gray-700 mb-2">
+                            <div class="flex items-center mb-2">
+                                <span class="flex items-center justify-center w-6 h-6 bg-pink-500 text-white rounded-full text-xs font-semibold mr-2">1</span>
+                                <label for="service_id" class="block text-sm font-medium text-gray-700">
                                 Select Service <span class="text-red-500">*</span>
                             </label>
+                            </div>
                             <select name="service_id" id="service_id" required
                                 class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
                                 <option value="">Choose a service...</option>
@@ -78,11 +81,38 @@
                             </div>
                         </div>
 
-                        <!-- Staff Selection (Optional) -->
+                        <!-- Step 2: Time Selection -->
                         <div class="mb-6">
-                            <label for="staff_id" class="block text-sm font-medium text-gray-700 mb-2">
-                                Select Staff <span class="text-gray-500">(Optional)</span>
+                            <div class="flex items-center mb-2">
+                                <span class="flex items-center justify-center w-6 h-6 bg-pink-500 text-white rounded-full text-xs font-semibold mr-2">2</span>
+                                <label for="appointment_time" class="block text-sm font-medium text-gray-700">
+                                    Appointment Time <span class="text-red-500">*</span>
+                                </label>
+                            </div>
+                            <div id="timeSlotLoading" class="hidden">
+                                <div class="flex items-center justify-center p-4">
+                                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500"></div>
+                                    <span class="ml-2 text-gray-600">Loading available times...</span>
+                                </div>
+                            </div>
+                            <div id="timeSlotContainer" class="grid grid-cols-3 md:grid-cols-4 gap-3">
+                                <p class="text-gray-500 text-sm col-span-full">Please select a service first</p>
+                            </div>
+                            <input type="hidden" name="appointment_time" id="appointment_time"
+                                value="{{ old('appointment_time') }}">
+                            @error('appointment_time')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Step 3: Staff Selection (Optional) -->
+                        <div class="mb-6">
+                            <div class="flex items-center mb-2">
+                                <span class="flex items-center justify-center w-6 h-6 bg-pink-500 text-white rounded-full text-xs font-semibold mr-2">3</span>
+                                <label for="staff_id" class="block text-sm font-medium text-gray-700">
+                                    Assign Staff <span class="text-gray-500">(Optional)</span>
                             </label>
+                            </div>
                             <div id="staffLoading" class="hidden">
                                 <div class="flex items-center justify-center p-4">
                                     <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500"></div>
@@ -92,32 +122,12 @@
                             <select name="staff_id" id="staff_id"
                                 class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500"
                                 disabled>
-                                <option value="">Please select a service and date first</option>
+                                <option value="">Please select a service and appointment time first</option>
                             </select>
                             <div id="staffInfo" class="mt-2 text-sm text-gray-600 hidden">
                                 <!-- Staff information will be displayed here -->
                             </div>
                             @error('staff_id')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-                        <!-- Time Selection -->
-                        <div class="mb-6">
-                            <label for="appointment_time" class="block text-sm font-medium text-gray-700 mb-2">
-                                Appointment Time <span class="text-red-500">*</span>
-                            </label>
-                            <div id="timeSlotLoading" class="hidden">
-                                <div class="flex items-center justify-center p-4">
-                                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500"></div>
-                                    <span class="ml-2 text-gray-600">Loading available times...</span>
-                                </div>
-                            </div>
-                            <div id="timeSlotContainer" class="grid grid-cols-3 md:grid-cols-4 gap-3">
-                                <!-- Time slots will be populated here -->
-                            </div>
-                            <input type="hidden" name="appointment_time" id="appointment_time"
-                                value="{{ old('appointment_time') }}">
-                            @error('appointment_time')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror
                         </div>
@@ -182,56 +192,69 @@
     <script>
         let selectedTimeSlot = null;
 
-        // Service selection handler
+        // Date change handler - Load time slots if service is selected
+        document.getElementById('appointment_date').addEventListener('change', function() {
+            const serviceId = document.getElementById('service_id').value;
+            
+            if (serviceId && this.value) {
+                // Clear previous time and staff selections
+                clearTimeSlots();
+                clearStaffSelection();
+                
+                // Load time slots
+                loadTimeSlots();
+            } else {
+                clearTimeSlots();
+                clearStaffSelection();
+            }
+        });
+
+        // Service selection handler - Step 1
         document.getElementById('service_id').addEventListener('change', function() {
             const selectedOption = this.options[this.selectedIndex];
             const serviceDetails = document.getElementById('serviceDetails');
+            const dateInput = document.getElementById('appointment_date');
 
             if (this.value) {
                 document.getElementById('servicePrice').textContent = selectedOption.dataset.price;
                 document.getElementById('serviceDuration').textContent = selectedOption.dataset.duration;
                 serviceDetails.classList.remove('hidden');
-                updateBookingSummary();
+                
+                // Clear time slots and staff
+                clearTimeSlots();
+                clearStaffSelection();
 
-                // Load staff if date is already selected
-                const date = document.getElementById('appointment_date').value;
-                if (date) {
-                    loadAvailableStaff();
+                // If date is already selected, load time slots
+                if (dateInput.value) {
                     loadTimeSlots();
                 }
+                
+                updateBookingSummary();
             } else {
                 serviceDetails.classList.add('hidden');
                 document.getElementById('bookingSummary').classList.add('hidden');
+                
                 clearTimeSlots();
-
-                // Reset staff selection
-                const staffSelect = document.getElementById('staff_id');
-                staffSelect.innerHTML = '<option value="">Please select a service and date first</option>';
-                staffSelect.disabled = true;
-                document.getElementById('staffInfo').classList.add('hidden');
+                clearStaffSelection();
             }
         });
 
-        // Date and staff change handlers
-        document.getElementById('appointment_date').addEventListener('change', function() {
-            loadAvailableStaff();
-            loadTimeSlots();
-        });
+        // Staff change handler
         document.getElementById('staff_id').addEventListener('change', function() {
-            loadTimeSlots();
             updateBookingSummary();
         });
 
-        // Load available staff for selected date and service
+        // Load available staff for selected service, date, and time - Step 4
         function loadAvailableStaff() {
             const serviceId = document.getElementById('service_id').value;
             const date = document.getElementById('appointment_date').value;
+            const time = selectedTimeSlot;
             const staffSelect = document.getElementById('staff_id');
             const staffLoading = document.getElementById('staffLoading');
             const staffInfo = document.getElementById('staffInfo');
 
-            if (!serviceId || !date) {
-                staffSelect.innerHTML = '<option value="">Please select a service and date first</option>';
+            if (!serviceId || !date || !time) {
+                staffSelect.innerHTML = '<option value="">Please select a service, date, and time first</option>';
                 staffSelect.disabled = true;
                 staffInfo.classList.add('hidden');
                 return;
@@ -240,7 +263,13 @@
             staffLoading.classList.remove('hidden');
             staffSelect.disabled = true;
 
-            fetch(`{{ route('client.appointments.available-staff') }}?service_id=${serviceId}&date=${date}`, {
+            // Build URL with time parameter
+            let url = `{{ route('client.appointments.available-staff') }}?service_id=${serviceId}&date=${date}`;
+            if (time) {
+                url += `&time=${time}`;
+            }
+
+            fetch(url, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -288,18 +317,20 @@
                         });
 
                         // Show staff info
+                        const timeDisplay = selectedTimeSlot ? formatTime12Hour(selectedTimeSlot) : 'selected time';
                         staffInfo.innerHTML = `
                             <div class="bg-blue-50 p-3 rounded-lg">
-                                <p class="font-medium text-blue-900">Available Staff for ${data.day_of_week}</p>
-                                <p class="text-blue-700 text-sm">${data.available_staff.length} staff member(s) available for ${data.service_name}</p>
+                                <p class="font-medium text-blue-900">Available Staff for ${data.day_of_week} at ${timeDisplay}</p>
+                                <p class="text-blue-700 text-sm">${data.available_staff.length} staff member(s) available for ${data.service_name} at this time</p>
                             </div>
                         `;
                         staffInfo.classList.remove('hidden');
                     } else {
+                        const timeDisplay = selectedTimeSlot ? formatTime12Hour(selectedTimeSlot) : 'selected time';
                         staffInfo.innerHTML = `
                             <div class="bg-yellow-50 p-3 rounded-lg">
                                 <p class="font-medium text-yellow-900">No Staff Available</p>
-                                <p class="text-yellow-700 text-sm">No staff members are available for this service on ${data.day_of_week}. You can still book and we'll assign available staff.</p>
+                                <p class="text-yellow-700 text-sm">No staff members are available for ${data.service_name} on ${data.day_of_week} at ${timeDisplay}. You can still book and we'll assign available staff.</p>
                             </div>
                         `;
                         staffInfo.classList.remove('hidden');
@@ -349,22 +380,33 @@
                 });
         }
 
-        // Load available time slots
+        // Load available time slots - Step 2 (after service selection)
         function loadTimeSlots() {
             const serviceId = document.getElementById('service_id').value;
             const date = document.getElementById('appointment_date').value;
-            const staffId = document.getElementById('staff_id').value;
 
             if (!serviceId || !date) {
-                clearTimeSlots();
+                if (!serviceId) {
+                    document.getElementById('timeSlotContainer').innerHTML = 
+                        '<p class="text-gray-500 text-sm col-span-full">Please select a service first</p>';
+                } else {
+                    document.getElementById('timeSlotContainer').innerHTML = 
+                        '<p class="text-gray-500 text-sm col-span-full">Please select a date first</p>';
+                }
+                clearStaffSelection();
                 return;
             }
 
             document.getElementById('timeSlotLoading').classList.remove('hidden');
             document.getElementById('timeSlotContainer').innerHTML = '';
 
-            fetch(
-                    `{{ route('client.appointments.available-slots') }}?service_id=${serviceId}&date=${date}&staff_id=${staffId}`)
+            // Clear previous time selection
+            selectedTimeSlot = null;
+            document.getElementById('appointment_time').value = '';
+            clearStaffSelection();
+
+            // Don't pass staff_id when loading time slots - we want all available times
+            fetch(`{{ route('client.appointments.available-slots') }}?service_id=${serviceId}&date=${date}`)
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('timeSlotLoading').classList.add('hidden');
@@ -374,7 +416,7 @@
                     document.getElementById('timeSlotLoading').classList.add('hidden');
                     console.error('Error loading time slots:', error);
                     document.getElementById('timeSlotContainer').innerHTML =
-                        '<p class="text-red-600 text-sm">Error loading available times. Please try again.</p>';
+                        '<p class="text-red-600 text-sm col-span-full">Error loading available times. Please try again.</p>';
                 });
         }
 
@@ -421,7 +463,7 @@
             }
         }
 
-        // Select time slot
+        // Select time slot - Step 2 (triggers staff loading)
         function selectTimeSlot(time, button) {
             // Remove previous selection
             document.querySelectorAll('.time-slot-btn').forEach(btn => {
@@ -437,12 +479,26 @@
             document.getElementById('appointment_time').value = time;
             selectedTimeSlot = time;
 
+            // Clear previous staff selection and load available staff for this service and time
+            clearStaffSelection();
+            loadAvailableStaff();
+
             updateBookingSummary();
+        }
+        
+        // Clear staff selection
+        function clearStaffSelection() {
+            const staffSelect = document.getElementById('staff_id');
+            const staffInfo = document.getElementById('staffInfo');
+            
+            staffSelect.innerHTML = '<option value="">Please select a service and appointment time first</option>';
+            staffSelect.disabled = true;
+            staffInfo.classList.add('hidden');
         }
 
         // Clear time slots
         function clearTimeSlots() {
-            document.getElementById('timeSlotContainer').innerHTML = '';
+            document.getElementById('timeSlotContainer').innerHTML = '<p class="text-gray-500 text-sm col-span-full">Please select a service first</p>';
             document.getElementById('appointment_time').value = '';
             selectedTimeSlot = null;
         }
@@ -485,11 +541,38 @@
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
+            const serviceId = document.getElementById('service_id').value;
+            const dateInput = document.getElementById('appointment_date');
+            
+            // If service is already selected, show service details
+            if (serviceId) {
+                const serviceSelect = document.getElementById('service_id');
+                const selectedOption = serviceSelect.options[serviceSelect.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    document.getElementById('servicePrice').textContent = selectedOption.dataset.price;
+                    document.getElementById('serviceDuration').textContent = selectedOption.dataset.duration;
+                    document.getElementById('serviceDetails').classList.remove('hidden');
+                }
+                
+                // If date is also selected, load time slots
+                if (dateInput.value) {
+                    loadTimeSlots();
+                }
+            }
+            
             // If there are old values (validation errors), restore the state
             const oldTime = document.getElementById('appointment_time').value;
-            if (oldTime) {
+            if (oldTime && serviceId && dateInput.value) {
                 selectedTimeSlot = oldTime;
                 loadTimeSlots();
+                
+                // After time slots load, select the old time and load staff
+                setTimeout(() => {
+                    const timeButton = document.querySelector(`[data-time="${oldTime}"]`);
+                    if (timeButton) {
+                        selectTimeSlot(oldTime, timeButton);
+                    }
+                }, 500);
             }
         });
     </script>

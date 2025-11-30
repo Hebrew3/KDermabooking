@@ -46,4 +46,9 @@ return [
         'webhook_url' => env('GOOGLE_CHAT_WEBHOOK_URL'),
     ],
 
+    'gemini' => [
+        'enabled' => env('GEMINI_ENABLED', false),
+        'api_key' => env('GEMINI_API_KEY'),
+    ],
+
 ];

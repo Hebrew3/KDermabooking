@@ -359,6 +359,7 @@ class InventoryItem extends Model
 
     /**
      * Deduct volume in mL from inventory.
+     * Virtual Deduction System: Only decrements physical containers when they are fully empty.
      */
     public function deductVolumeMl(float $volumeMl): bool
     {
@@ -385,51 +386,76 @@ class InventoryItem extends Model
             $this->setAttribute('total_volume_ml', '0.00');
         }
 
-        if ($this->total_volume_ml < $volumeMl) {
-            \Log::warning("Insufficient volume for {$this->name}: Available={$this->total_volume_ml} mL, Required={$volumeMl} mL");
+        // Check if we have enough volume
+        $currentTotalVolume = (float) $this->total_volume_ml;
+        if ($currentTotalVolume < $volumeMl) {
+            \Log::warning("Insufficient volume for {$this->name}: Available={$currentTotalVolume} mL, Required={$volumeMl} mL");
             return false; // Insufficient volume
         }
 
-        // Store original value for logging
-        $originalVolume = $this->total_volume_ml;
-        
-        // Deduct from total volume
-        $currentVolume = $this->total_volume_ml === null ? 0.0 : (float) $this->total_volume_ml;
-        $newVolume = max(0.0, $currentVolume - $volumeMl);
-        $this->setAttribute('total_volume_ml', (string) $newVolume);
-        
-        \Log::info("Deducting {$volumeMl} mL from {$this->name}: {$originalVolume} mL -> {$this->total_volume_ml} mL");
-
-        // Update remaining volume per container
-        $currentTotalVolume = (float) $this->total_volume_ml;
+        // Store original values for logging
+        $originalVolume = $currentTotalVolume;
+        $originalStock = $this->current_stock;
         $volumePerContainer = $this->volume_per_container === null ? 0.0 : (float) $this->volume_per_container;
         
-        if ($this->remaining_volume_per_container !== null && $this->remaining_volume_per_container > 0) {
-            // Deduct from current container first
-            $currentRemaining = (float) $this->remaining_volume_per_container;
-            $newRemaining = max(0.0, $currentRemaining - $volumeMl);
-            $this->setAttribute('remaining_volume_per_container', (string) $newRemaining);
-            
-            // If we used more than what was in the current container, we need to account for that
-            if ($this->remaining_volume_per_container <= 0 && $currentTotalVolume > 0) {
-                // Current container is empty, calculate remaining from next container
-                $newRemaining = (float) min($volumePerContainer, $currentTotalVolume);
-                $this->setAttribute('remaining_volume_per_container', (string) $newRemaining);
-            }
-        } else {
-            // Initialize remaining volume if not set or was 0
-            if ($currentTotalVolume > 0) {
-                $newRemaining = min($volumePerContainer, $currentTotalVolume);
-                $this->setAttribute('remaining_volume_per_container', (string) $newRemaining);
+        if ($volumePerContainer <= 0) {
+            \Log::warning("Invalid volume_per_container for {$this->name}: {$volumePerContainer}. Cannot perform virtual deduction.");
+            return false;
+        }
+
+        // Initialize remaining_volume_per_container if not set
+        $currentRemaining = $this->remaining_volume_per_container === null ? 0.0 : (float) $this->remaining_volume_per_container;
+        
+        // If no open container, start with the first one
+        if ($currentRemaining <= 0 && $currentTotalVolume > 0) {
+            $currentRemaining = min($volumePerContainer, $currentTotalVolume);
+        }
+
+        // Track how much volume we still need to deduct
+        $remainingToDeduct = $volumeMl;
+        $containersUsed = 0;
+
+        // Deduct volume, container by container
+        while ($remainingToDeduct > 0 && $currentTotalVolume > 0) {
+            if ($currentRemaining >= $remainingToDeduct) {
+                // Current container has enough, just deduct from it
+                $currentRemaining -= $remainingToDeduct;
+                $currentTotalVolume -= $remainingToDeduct;
+                $remainingToDeduct = 0;
             } else {
-                $this->setAttribute('remaining_volume_per_container', '0.00');
+                // Current container doesn't have enough, use it all up
+                $usedFromContainer = $currentRemaining;
+                $currentTotalVolume -= $usedFromContainer;
+                $remainingToDeduct -= $usedFromContainer;
+                $currentRemaining = 0;
+                
+                // Container is now empty, decrement physical stock
+                if ($this->current_stock > 0) {
+                    $this->current_stock = max(0, $this->current_stock - 1);
+                    $containersUsed++;
+                }
+                
+                // If there's still volume to deduct and we have more containers, start the next one
+                if ($remainingToDeduct > 0 && $currentTotalVolume > 0) {
+                    $currentRemaining = min($volumePerContainer, $currentTotalVolume);
+                }
             }
         }
 
-        // Update current_stock (number of containers) based on total volume
-        $this->current_stock = $this->total_volume_ml > 0 ? (int) ceil($this->total_volume_ml / $this->volume_per_container) : 0;
+        // Update the model attributes
+        $this->setAttribute('total_volume_ml', (string) max(0.0, $currentTotalVolume));
+        $this->setAttribute('remaining_volume_per_container', (string) max(0.0, $currentRemaining));
+        
+        // If we've used all containers, ensure remaining is 0
+        if ($currentTotalVolume <= 0) {
+            $this->setAttribute('remaining_volume_per_container', '0.00');
+            $this->current_stock = 0;
+        }
 
         $this->save();
+        
+        \Log::info("Deducted {$volumeMl} mL from {$this->name}: {$originalVolume} mL -> {$this->total_volume_ml} mL. Physical containers: {$originalStock} -> {$this->current_stock} (used {$containersUsed} full container(s))");
+        
         return true;
     }
 
