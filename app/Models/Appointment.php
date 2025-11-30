@@ -233,6 +233,64 @@ class Appointment extends Model
     }
 
     /**
+     * Get the formatted appointment date.
+     */
+    public function getFormattedDateAttribute(): string
+    {
+        try {
+            $dateValue = $this->getAttribute('appointment_date');
+            $appointmentDate = TimeHelper::parseDate($dateValue);
+            
+            if (!$appointmentDate) {
+                return 'Date not set';
+            }
+            
+            return $appointmentDate->format('F d, Y'); // e.g., "December 01, 2025"
+        } catch (\Exception $e) {
+            \Log::error('Error formatting appointment date', [
+                'appointment_id' => $this->id,
+                'error' => $e->getMessage()
+            ]);
+            return 'Invalid date';
+        }
+    }
+
+    /**
+     * Get the formatted appointment time.
+     */
+    public function getFormattedTimeAttribute(): string
+    {
+        try {
+            if (empty($this->appointment_time)) {
+                return 'Time not set';
+            }
+
+            // Use TimeHelper to parse time
+            $time = TimeHelper::parseTime($this->appointment_time);
+
+            if ($time) {
+                return $time->format('g:i A'); // e.g., "10:00 AM"
+            } else {
+                // Fallback: try to format as string
+                // Normalize time format (remove seconds if present)
+                $normalizedTime = preg_replace('/:\d{2}$/', '', $this->appointment_time);
+                try {
+                    $parsedTime = Carbon::createFromFormat('H:i', $normalizedTime);
+                    return $parsedTime->format('g:i A');
+                } catch (\Exception $e) {
+                    return $this->appointment_time; // Return as-is if parsing fails
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error formatting appointment time', [
+                'appointment_id' => $this->id,
+                'error' => $e->getMessage()
+            ]);
+            return 'Invalid time';
+        }
+    }
+
+    /**
      * Get the formatted appointment date and time.
      */
     public function getFormattedDateTimeAttribute(): string

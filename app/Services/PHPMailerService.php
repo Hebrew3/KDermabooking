@@ -687,4 +687,326 @@ K-Derma Booking System
 This is an automated message, please do not reply.
         ";
     }
+
+    /**
+     * Send emergency staff replacement notification email to client.
+     */
+    public function sendEmergencyStaffReplacementEmail(
+        $email,
+        $clientName,
+        $originalStaffName,
+        $replacementStaffName,
+        $appointmentDate,
+        $appointmentTime,
+        $serviceName,
+        $appointmentNumber,
+        $acceptUrl,
+        $cancelUrl
+    ) {
+        try {
+            // Recipients
+            $this->mail->addAddress($email, $clientName);
+
+            // Content
+            $this->mail->Subject = 'Important: Staff Emergency - Action Required for Your Appointment';
+            
+            $this->mail->Body = $this->getEmergencyStaffReplacementEmailTemplate(
+                $clientName,
+                $originalStaffName,
+                $replacementStaffName,
+                $appointmentDate,
+                $appointmentTime,
+                $serviceName,
+                $appointmentNumber,
+                $acceptUrl,
+                $cancelUrl
+            );
+            $this->mail->AltBody = $this->getEmergencyStaffReplacementTextTemplate(
+                $clientName,
+                $originalStaffName,
+                $replacementStaffName,
+                $appointmentDate,
+                $appointmentTime,
+                $serviceName,
+                $appointmentNumber,
+                $acceptUrl,
+                $cancelUrl
+            );
+
+            $this->mail->send();
+            
+            Log::info('Emergency staff replacement email sent successfully to: ' . $email);
+            return true;
+
+        } catch (Exception $e) {
+            Log::error('Failed to send emergency staff replacement email: ' . $e->getMessage());
+            return false;
+        } finally {
+            // Clear addresses for next email
+            $this->mail->clearAddresses();
+        }
+    }
+
+    private function getEmergencyStaffReplacementEmailTemplate(
+        $clientName,
+        $originalStaffName,
+        $replacementStaffName,
+        $appointmentDate,
+        $appointmentTime,
+        $serviceName,
+        $appointmentNumber,
+        $acceptUrl,
+        $cancelUrl
+    ) {
+        $greeting = $clientName ? "Hi {$clientName}!" : "Hello!";
+        $hasReplacement = !empty($replacementStaffName);
+        
+        return "
+        <!DOCTYPE html>
+        <html lang='en'>
+        <head>
+            <meta charset='UTF-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>Staff Emergency - Action Required - K-Derma</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    margin: 0;
+                    padding: 20px;
+                    background-color: #f5f5f5;
+                }
+                .container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    background-color: #ffffff;
+                    border-radius: 10px;
+                    overflow: hidden;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                .header {
+                    background-color: #ec4899;
+                    padding: 25px 20px;
+                    text-align: center;
+                    color: white;
+                }
+                .logo-text {
+                    font-size: 28px;
+                    font-weight: bold;
+                    margin: 0;
+                }
+                .tagline {
+                    font-size: 14px;
+                    margin: 5px 0 0 0;
+                    opacity: 0.9;
+                }
+                .content {
+                    padding: 40px 30px;
+                }
+                .greeting {
+                    font-size: 20px;
+                    color: #333;
+                    margin-bottom: 20px;
+                    font-weight: 600;
+                }
+                .alert-box {
+                    background-color: #fef3c7;
+                    border-left: 4px solid #f59e0b;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 5px;
+                }
+                .alert-box strong {
+                    color: #92400e;
+                    display: block;
+                    margin-bottom: 10px;
+                    font-size: 18px;
+                }
+                .message {
+                    font-size: 16px;
+                    color: #666;
+                    margin-bottom: 20px;
+                    line-height: 1.5;
+                }
+                .details-box {
+                    background-color: #f8f9fa;
+                    border: 1px solid #e9ecef;
+                    border-radius: 8px;
+                    padding: 20px;
+                    margin: 20px 0;
+                }
+                .detail-row {
+                    display: flex;
+                    justify-content: space-between;
+                    padding: 8px 0;
+                    border-bottom: 1px solid #e9ecef;
+                }
+                .detail-row:last-child {
+                    border-bottom: none;
+                }
+                .detail-label {
+                    font-weight: 600;
+                    color: #495057;
+                }
+                .detail-value {
+                    color: #212529;
+                }
+                .action-buttons {
+                    margin: 30px 0;
+                    text-align: center;
+                }
+                .button {
+                    display: inline-block;
+                    padding: 14px 28px;
+                    margin: 8px;
+                    text-decoration: none;
+                    border-radius: 8px;
+                    font-weight: 600;
+                    font-size: 16px;
+                    transition: all 0.3s ease;
+                }
+                .button-accept {
+                    background-color: #10b981;
+                    color: white;
+                }
+                .button-accept:hover {
+                    background-color: #059669;
+                }
+                .button-cancel {
+                    background-color: #ef4444;
+                    color: white;
+                }
+                .button-cancel:hover {
+                    background-color: #dc2626;
+                }
+                .footer {
+                    background-color: #f8f9fa;
+                    padding: 20px;
+                    text-align: center;
+                    color: #666;
+                    font-size: 12px;
+                    border-top: 1px solid #eee;
+                }
+                .warning-text {
+                    color: #dc2626;
+                    font-weight: 600;
+                    margin-top: 20px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <div class='logo-text'>K-DERMA</div>
+                    <div class='tagline'>Professional Dermatology Services</div>
+                </div>
+                
+                <div class='content'>
+                    <div class='greeting'>{$greeting}</div>
+                    
+                    <div class='alert-box'>
+                        <strong>⚠️ Important Notice: Staff Emergency</strong>
+                        We regret to inform you that {$originalStaffName}, your preferred staff member, has encountered an emergency and will be unable to attend your scheduled appointment.
+                    </div>
+                    
+                    <div class='message'>
+                        " . ($hasReplacement ? 
+                            "We have assigned <strong>{$replacementStaffName}</strong> as your new staff member to continue with your service. " .
+                            "Please review the appointment details below and choose one of the following options:" :
+                            "We are currently working to find a suitable replacement staff member for your appointment. " .
+                            "Please review the appointment details below and choose one of the following options:") . "
+                    </div>
+                    
+                    <div class='details-box'>
+                        <div class='detail-row'>
+                            <span class='detail-label'>Appointment Number:</span>
+                            <span class='detail-value'>{$appointmentNumber}</span>
+                        </div>
+                        <div class='detail-row'>
+                            <span class='detail-label'>Service:</span>
+                            <span class='detail-value'>{$serviceName}</span>
+                        </div>
+                        <div class='detail-row'>
+                            <span class='detail-label'>Date:</span>
+                            <span class='detail-value'>{$appointmentDate}</span>
+                        </div>
+                        <div class='detail-row'>
+                            <span class='detail-label'>Time:</span>
+                            <span class='detail-value'>{$appointmentTime}</span>
+                        </div>
+                        " . ($hasReplacement ? "<div class='detail-row'>
+                            <span class='detail-label'>New Staff:</span>
+                            <span class='detail-value'><strong>{$replacementStaffName}</strong></span>
+                        </div>" : "") . "
+                    </div>
+                    
+                    <div class='action-buttons'>
+                        " . ($hasReplacement ? "<a href='{$acceptUrl}' class='button button-accept'>✓ Accept New Staff</a>" : "") . "
+                        <a href='{$cancelUrl}' class='button button-cancel'>✗ Cancel Appointment</a>
+                    </div>
+                    
+                    <div class='warning-text'>
+                        ⚠️ Please respond within 24 hours. If no response is received, your appointment may be automatically cancelled.
+                    </div>
+                </div>
+                
+                <div class='footer'>
+                    <strong>K-Derma Booking System</strong><br>
+                    © " . date('Y') . " All rights reserved.<br>
+                    This is an automated message, please do not reply.
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+    }
+
+    private function getEmergencyStaffReplacementTextTemplate(
+        $clientName,
+        $originalStaffName,
+        $replacementStaffName,
+        $appointmentDate,
+        $appointmentTime,
+        $serviceName,
+        $appointmentNumber,
+        $acceptUrl,
+        $cancelUrl
+    ) {
+        $greeting = $clientName ? "Hi {$clientName}!" : "Hello!";
+        $hasReplacement = !empty($replacementStaffName);
+        
+        return "
+K-DERMA BOOKING SYSTEM
+Professional Dermatology Services
+
+{$greeting}
+
+⚠️ IMPORTANT NOTICE: STAFF EMERGENCY
+
+We regret to inform you that {$originalStaffName}, your preferred staff member, has encountered an emergency and will be unable to attend your scheduled appointment.
+
+" . ($hasReplacement ? 
+    "We have assigned {$replacementStaffName} as your new staff member to continue with your service." :
+    "We are currently working to find a suitable replacement staff member for your appointment.") . "
+
+APPOINTMENT DETAILS:
+Appointment Number: {$appointmentNumber}
+Service: {$serviceName}
+Date: {$appointmentDate}
+Time: {$appointmentTime}
+" . ($hasReplacement ? "New Staff: {$replacementStaffName}\n" : "") . "
+
+ACTION REQUIRED:
+" . ($hasReplacement ? "Accept New Staff: {$acceptUrl}\n" : "") . "
+Cancel Appointment: {$cancelUrl}
+
+⚠️ Please respond within 24 hours. If no response is received, your appointment may be automatically cancelled.
+
+---
+K-Derma Booking System
+© " . date('Y') . " All rights reserved.
+This is an automated message, please do not reply.
+        ";
+    }
 }

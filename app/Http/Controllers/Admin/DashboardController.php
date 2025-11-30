@@ -8,6 +8,7 @@ use App\Models\Service;
 use App\Models\Appointment;
 use App\Models\SaleItem;
 use App\Models\InventoryItem;
+use App\Models\InventoryUsageLog;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -92,22 +93,31 @@ class DashboardController extends Controller
 
         // Monthly Revenue Chart Data (filtered by year and month)
         $monthlyRevenue = [];
+        $processedMonths = []; // Track processed months to avoid duplicates
         
         if ($revenueYear && $revenueMonth && $revenueMonth !== 'all') {
             // If both year and month are specified (and not "all"), show that specific month and 5 months before it
             $endDate = Carbon::create($revenueYear, $revenueMonth, 1)->endOfMonth();
             $startDate = $endDate->copy()->subMonths(5)->startOfMonth();
             
-            // Generate months array
+            // Generate months array - ensure unique months
             for ($i = 5; $i >= 0; $i--) {
                 $date = $endDate->copy()->subMonths($i);
+                $monthKey = $date->format('M Y');
+                
+                // Skip if this month was already processed
+                if (in_array($monthKey, $processedMonths)) {
+                    continue;
+                }
+                $processedMonths[] = $monthKey;
+                
                 $revenue = Appointment::where('status', 'completed')
                     ->whereMonth('appointment_date', $date->month)
                     ->whereYear('appointment_date', $date->year)
                     ->sum('total_amount');
                 
                 $monthlyRevenue[] = [
-                    'month' => $date->format('M Y'),
+                    'month' => $monthKey,
                     'revenue' => $revenue
                 ];
             }
@@ -115,27 +125,43 @@ class DashboardController extends Controller
             // If year is specified and month is "all" or not specified, show all 12 months of that year
             for ($m = 1; $m <= 12; $m++) {
                 $date = Carbon::create($revenueYear, $m, 1);
+                $monthKey = $date->format('M Y');
+                
+                // Skip if this month was already processed
+                if (in_array($monthKey, $processedMonths)) {
+                    continue;
+                }
+                $processedMonths[] = $monthKey;
+                
                 $revenue = Appointment::where('status', 'completed')
                     ->whereMonth('appointment_date', $m)
                     ->whereYear('appointment_date', $revenueYear)
                     ->sum('total_amount');
                 
                 $monthlyRevenue[] = [
-                    'month' => $date->format('M Y'),
+                    'month' => $monthKey,
                     'revenue' => $revenue
                 ];
             }
         } else {
-            // Default: Get last 6 months
+            // Default: Get last 6 months - ensure unique months
             for ($i = 5; $i >= 0; $i--) {
                 $date = now()->subMonths($i);
+                $monthKey = $date->format('M Y');
+                
+                // Skip if this month was already processed
+                if (in_array($monthKey, $processedMonths)) {
+                    continue;
+                }
+                $processedMonths[] = $monthKey;
+                
                 $revenue = Appointment::where('status', 'completed')
                     ->whereMonth('appointment_date', $date->month)
                     ->whereYear('appointment_date', $date->year)
                     ->sum('total_amount');
                 
                 $monthlyRevenue[] = [
-                    'month' => $date->format('M Y'),
+                    'month' => $monthKey,
                     'revenue' => $revenue
                 ];
             }
@@ -328,90 +354,84 @@ class DashboardController extends Controller
         // Ensure months array is unique and properly sorted
         $months = array_values(array_unique($months));
 
-        // Product Sales Analytics (Top-selling products comparison)
+        // Unified Product Analytics (Sales & Usage)
         // Get filter parameters from request
-        $year = request()->get('year', null);
-        $month = request()->get('month', null);
-        $productId = request()->get('product', null);
+        $analyticsYear = request()->get('analytics_year', now()->year);
+        $analyticsMonth = request()->get('analytics_month', null);
+        $productCategory = request()->get('product_category', 'all'); // all, aftercare, treatment
+        $metricType = request()->get('metric_type', 'sales'); // sales, usage
+        $analyticsProductId = request()->get('analytics_product', null);
+        
+        // Convert year to integer, default to current year
+        if (!$analyticsYear) {
+            $analyticsYear = now()->year;
+        } else {
+            $analyticsYear = (int) $analyticsYear;
+        }
+        
+        // Convert month to integer if it's a valid month number
+        $analyticsMonthInt = null;
+        if ($analyticsMonth && $analyticsMonth !== 'all' && $analyticsMonth !== '' && is_numeric($analyticsMonth)) {
+            $analyticsMonthInt = (int) $analyticsMonth;
+            if ($analyticsMonthInt < 1 || $analyticsMonthInt > 12) {
+                $analyticsMonthInt = null;
+            }
+        }
         
         // Calculate date ranges for selected period based on filters
-        if ($year && $month) {
-            // If both year and month are specified, use that specific month
-            $selectedStartDate = Carbon::create($year, $month, 1)->startOfMonth();
-            $selectedEndDate = Carbon::create($year, $month, 1)->endOfMonth();
+        if ($analyticsMonthInt) {
+            // If month is specified, use that specific month
+            $analyticsStartDate = Carbon::create($analyticsYear, $analyticsMonthInt, 1)->startOfMonth();
+            $analyticsEndDate = Carbon::create($analyticsYear, $analyticsMonthInt, 1)->endOfMonth();
+            
+            // Check if the entire month is in the future
+            if ($analyticsStartDate->isFuture()) {
+                // If the start date is in the future, the entire month is in the future
+                // Set dates to an invalid range so no data will be returned
+                $analyticsStartDate = now()->addYear();
+                $analyticsEndDate = now()->addYear()->addDay();
+            } elseif ($analyticsEndDate->isFuture()) {
+                // If only the end date is in the future, cap it to today
+                $analyticsEndDate = now()->endOfDay();
+            }
+            
             // Previous period: same month previous year
-            $previousStartDate = Carbon::create($year - 1, $month, 1)->startOfMonth();
-            $previousEndDate = Carbon::create($year - 1, $month, 1)->endOfMonth();
-        } elseif ($year) {
-            // If only year is specified, use entire year
-            $selectedStartDate = Carbon::create($year, 1, 1)->startOfYear();
-            $selectedEndDate = Carbon::create($year, 12, 31)->endOfYear();
-            // Previous period: previous year
-            $previousStartDate = Carbon::create($year - 1, 1, 1)->startOfYear();
-            $previousEndDate = Carbon::create($year - 1, 12, 31)->endOfYear();
-        } elseif ($month) {
-            // If only month is specified, use current year
-            $selectedStartDate = Carbon::create(now()->year, $month, 1)->startOfMonth();
-            $selectedEndDate = Carbon::create(now()->year, $month, 1)->endOfMonth();
-            // Previous period: same month previous year
-            $previousStartDate = Carbon::create(now()->year - 1, $month, 1)->startOfMonth();
-            $previousEndDate = Carbon::create(now()->year - 1, $month, 1)->endOfMonth();
+            $analyticsPreviousStartDate = Carbon::create($analyticsYear - 1, $analyticsMonthInt, 1)->startOfMonth();
+            $analyticsPreviousEndDate = Carbon::create($analyticsYear - 1, $analyticsMonthInt, 1)->endOfMonth();
         } else {
-            // Default: last 30 days
-            $selectedStartDate = now()->subDays(30)->startOfDay();
-            $selectedEndDate = now()->endOfDay();
-            // Previous period: 30 days before that
-            $previousStartDate = $selectedStartDate->copy()->subDays(30);
-            $previousEndDate = $selectedStartDate->copy()->subSeconds(1);
+            // If "all" months, use entire year but only up to current date
+            $analyticsStartDate = Carbon::create($analyticsYear, 1, 1)->startOfYear();
+            $analyticsEndDate = Carbon::create($analyticsYear, 12, 31)->endOfYear();
+            // Don't include future dates
+            if ($analyticsEndDate->isFuture()) {
+                $analyticsEndDate = now()->endOfDay();
+            }
+            // Previous period: previous year
+            $analyticsPreviousStartDate = Carbon::create($analyticsYear - 1, 1, 1)->startOfYear();
+            $analyticsPreviousEndDate = Carbon::create($analyticsYear - 1, 12, 31)->endOfYear();
         }
         
-        // Build query for selected period
-        $selectedPeriodQuery = SaleItem::select('sale_items.inventory_item_id', 'sale_items.item_name', 'sale_items.item_sku')
-            ->selectRaw('SUM(sale_items.quantity) as total_quantity_sold')
-            ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
-            ->where('sales.status', 'completed')
-            ->whereBetween('sales.created_at', [$selectedStartDate, $selectedEndDate]);
-
-        // Build query for previous period
-        $previousPeriodQuery = SaleItem::select('sale_items.inventory_item_id', 'sale_items.item_name', 'sale_items.item_sku')
-            ->selectRaw('SUM(sale_items.quantity) as total_quantity_sold')
-            ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
-            ->where('sales.status', 'completed')
-            ->whereBetween('sales.created_at', [$previousStartDate, $previousEndDate]);
+        // Get unified analytics data based on metric type
+        $unifiedAnalyticsData = $this->getUnifiedAnalyticsData(
+            $metricType,
+            $productCategory,
+            $analyticsProductId,
+            $analyticsStartDate,
+            $analyticsEndDate,
+            $analyticsPreviousStartDate,
+            $analyticsPreviousEndDate
+        );
         
-        if ($productId) {
-            $selectedPeriodQuery->where('sale_items.inventory_item_id', $productId);
-            $previousPeriodQuery->where('sale_items.inventory_item_id', $productId);
-        }
-
-        // Get top-selling products for selected period
-        $topProducts = (clone $selectedPeriodQuery)
-            ->groupBy('sale_items.inventory_item_id', 'sale_items.item_name', 'sale_items.item_sku')
-            ->orderBy('total_quantity_sold', 'desc')
-            ->limit(10)
-            ->get();
-
-        // Get previous period data for comparison
-        $previousProducts = (clone $previousPeriodQuery)
-            ->groupBy('sale_items.inventory_item_id', 'sale_items.item_name', 'sale_items.item_sku')
-            ->get()
-            ->keyBy('inventory_item_id');
-
-        // Prepare comparison data
-        $productSalesData = [];
-        foreach ($topProducts as $product) {
-            $previousData = $previousProducts->get($product->inventory_item_id);
-            $productSalesData[] = [
-                'name' => $product->item_name,
-                'selected_period' => (int)$product->total_quantity_sold,
-                'previous_period' => $previousData ? (int)$previousData->total_quantity_sold : 0,
-            ];
-        }
-
-        // Get all products for filter dropdown
-        $allProducts = InventoryItem::active()
+        // Get all products for filter dropdown based on category
+        $allAnalyticsProducts = InventoryItem::active()
+            ->when($productCategory === 'aftercare', function($query) {
+                return $query->where('category', 'Aftercare Products');
+            })
+            ->when($productCategory === 'treatment', function($query) {
+                return $query->where('category', '!=', 'Aftercare Products');
+            })
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'category']);
 
         // Top Services by Revenue - Get filter parameters
         $servicesRevenueYear = request()->get('services_revenue_year', now()->year);
@@ -483,6 +503,7 @@ class DashboardController extends Controller
             ->limit(10)
             ->get(['id', 'name', 'sku', 'current_stock', 'minimum_stock', 'maximum_stock', 'unit']);
 
+
         $stats = [
             'users' => [
                 'total' => $totalUsers,
@@ -521,11 +542,6 @@ class DashboardController extends Controller
             'servicesMonthlyChartData',
             'months',
             'topServices',
-            'productSalesData',
-            'allProducts',
-            'year',
-            'month',
-            'productId',
             'topServicesByRevenue',
             'topClients',
             'totalInventoryItems',
@@ -540,7 +556,14 @@ class DashboardController extends Controller
             'servicesRevenueYear',
             'servicesRevenueMonth',
             'clientsYear',
-            'clientsMonth'
+            'clientsMonth',
+            'unifiedAnalyticsData',
+            'allAnalyticsProducts',
+            'analyticsYear',
+            'analyticsMonth',
+            'productCategory',
+            'metricType',
+            'analyticsProductId'
         ));
     }
 
@@ -1063,8 +1086,13 @@ class DashboardController extends Controller
             $previousStartDate = Carbon::create($year - 1, $month, 1)->startOfMonth();
             $previousEndDate = Carbon::create($year - 1, $month, 1)->endOfMonth();
         } elseif ($year) {
+            // If year is specified and month is "all", use entire year but only up to current date
             $selectedStartDate = Carbon::create($year, 1, 1)->startOfYear();
             $selectedEndDate = Carbon::create($year, 12, 31)->endOfYear();
+            // Don't include future dates
+            if ($selectedEndDate->isFuture()) {
+                $selectedEndDate = now()->endOfDay();
+            }
             $previousStartDate = Carbon::create($year - 1, 1, 1)->startOfYear();
             $previousEndDate = Carbon::create($year - 1, 12, 31)->endOfYear();
         } else {
@@ -1258,5 +1286,433 @@ class DashboardController extends Controller
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Export Treatment Products Usage Analytics to CSV
+     */
+    public function exportTreatmentProductsUsage(Request $request)
+    {
+        $year = (int) $request->get('treatment_products_year', now()->year);
+        $month = $request->get('treatment_products_month');
+        $productId = $request->get('treatment_product');
+        
+        if ($month && $month !== 'all' && $month !== '') {
+            $month = (int) $month;
+            $startDate = Carbon::create($year, $month, 1)->startOfMonth();
+            $endDate = Carbon::create($year, $month, 1)->endOfMonth();
+            $periodLabel = Carbon::create($year, $month, 1)->format('F Y');
+        } else {
+            // If "all" months, use entire year but only up to current date
+            $startDate = Carbon::create($year, 1, 1)->startOfYear();
+            $endDate = Carbon::create($year, 12, 31)->endOfYear();
+            // Don't include future dates
+            if ($endDate->isFuture()) {
+                $endDate = now()->endOfDay();
+            }
+            $periodLabel = $year;
+        }
+
+        // Get usage logs data
+        $usageLogsQuery = InventoryUsageLog::select(
+                'inventory_usage_logs.inventory_item_id',
+                'inventory_usage_logs.item_name',
+                'inventory_usage_logs.item_sku',
+                DB::raw('SUM(CASE 
+                    WHEN inventory_usage_logs.is_ml_tracking = 1 THEN inventory_usage_logs.volume_ml_deducted
+                    ELSE inventory_usage_logs.quantity_deducted
+                END) as total_usage'),
+                DB::raw('COUNT(*) as usage_count')
+            )
+            ->join('inventory_items', 'inventory_usage_logs.inventory_item_id', '=', 'inventory_items.id')
+            ->where('inventory_items.category', '!=', 'Aftercare Products')
+            ->where('inventory_items.is_active', true)
+            ->whereBetween('inventory_usage_logs.created_at', [$startDate, $endDate]);
+        
+        if ($productId) {
+            $usageLogsQuery->where('inventory_usage_logs.inventory_item_id', $productId);
+        }
+        
+        $usageLogs = $usageLogsQuery
+            ->groupBy('inventory_usage_logs.inventory_item_id', 'inventory_usage_logs.item_name', 'inventory_usage_logs.item_sku')
+            ->get();
+        
+        // Get sales data (same as Product Sales Analytics)
+        $salesQuery = SaleItem::select(
+                'sale_items.inventory_item_id',
+                'sale_items.item_name',
+                'sale_items.item_sku',
+                DB::raw('SUM(sale_items.quantity) as total_sold'),
+                DB::raw('COUNT(*) as sale_count')
+            )
+            ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+            ->join('inventory_items', 'sale_items.inventory_item_id', '=', 'inventory_items.id')
+            ->where('sales.status', 'completed')
+            ->where('inventory_items.category', '!=', 'Aftercare Products')
+            ->where('inventory_items.is_active', true)
+            ->whereBetween('sales.created_at', [$startDate, $endDate]);
+        
+        if ($productId) {
+            $salesQuery->where('sale_items.inventory_item_id', $productId);
+        }
+        
+        $sales = $salesQuery
+            ->groupBy('sale_items.inventory_item_id', 'sale_items.item_name', 'sale_items.item_sku')
+            ->get();
+        
+        // Combine usage logs and sales data
+        $combinedData = [];
+        
+        // Process usage logs
+        foreach ($usageLogs as $item) {
+            $key = $item->inventory_item_id;
+            $combinedData[$key] = [
+                'name' => $item->item_name ?? 'Unknown Product',
+                'sku' => $item->item_sku ?? 'N/A',
+                'total_usage' => (float)($item->total_usage ?? 0),
+                'usage_count' => (int)($item->usage_count ?? 0),
+            ];
+        }
+        
+        // Process sales and merge with usage logs
+        foreach ($sales as $item) {
+            $key = $item->inventory_item_id;
+            if (isset($combinedData[$key])) {
+                // Merge sales data with existing usage data
+                $combinedData[$key]['total_usage'] += (float)($item->total_sold ?? 0);
+                $combinedData[$key]['usage_count'] += (int)($item->sale_count ?? 0);
+            } else {
+                // Add new entry for products only sold (not used in appointments)
+                $combinedData[$key] = [
+                    'name' => $item->item_name ?? 'Unknown Product',
+                    'sku' => $item->item_sku ?? 'N/A',
+                    'total_usage' => (float)($item->total_sold ?? 0),
+                    'usage_count' => (int)($item->sale_count ?? 0),
+                ];
+            }
+        }
+        
+        // Sort by total_usage
+        usort($combinedData, function($a, $b) {
+            return $b['total_usage'] <=> $a['total_usage'];
+        });
+        
+        // Only show data if there's actual data
+        $treatmentProductsData = [];
+        if (count($combinedData) > 0) {
+            $treatmentProductsData = $combinedData;
+        }
+
+        $filename = 'treatment_products_usage_' . date('Y-m-d_His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ];
+
+        $callback = function() use ($treatmentProductsData, $periodLabel) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['Product Name', 'SKU', 'Total Usage (per container)', 'Usage Count', 'Period']);
+            
+            foreach ($treatmentProductsData as $row) {
+                fputcsv($file, [
+                    $row['name'],
+                    $row['sku'],
+                    $row['total_usage'],
+                    $row['usage_count'],
+                    $periodLabel
+                ]);
+            }
+            
+            fclose($file);
+        };
+
+        return response()->streamDownload($callback, $filename, $headers);
+    }
+
+    /**
+     * Get unified analytics data (Sales or Usage)
+     */
+    private function getUnifiedAnalyticsData(
+        string $metricType,
+        string $productCategory,
+        ?int $productId,
+        Carbon $startDate,
+        Carbon $endDate,
+        Carbon $previousStartDate,
+        Carbon $previousEndDate
+    ): array {
+        $data = [];
+        
+        if ($metricType === 'sales') {
+            // Sales metric: Get data from SaleItem (POS sales)
+            // Check if date range is valid (start date should not be after end date)
+            if ($startDate->gt($endDate)) {
+                // Invalid date range (e.g., future month), return empty data
+                return [];
+            }
+            
+            $selectedQuery = SaleItem::select('sale_items.inventory_item_id', 'sale_items.item_name', 'sale_items.item_sku')
+                ->selectRaw('SUM(sale_items.quantity) as total_quantity')
+                ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+                ->join('inventory_items', 'sale_items.inventory_item_id', '=', 'inventory_items.id')
+                ->where('sales.status', 'completed')
+                ->where('inventory_items.is_active', true)
+                ->whereBetween('sales.created_at', [$startDate, $endDate]);
+            
+            // Apply product category filter
+            if ($productCategory === 'aftercare') {
+                $selectedQuery->where('inventory_items.category', 'Aftercare Products');
+            } elseif ($productCategory === 'treatment') {
+                $selectedQuery->where('inventory_items.category', '!=', 'Aftercare Products');
+            }
+            
+            // Apply product filter if selected
+            if ($productId) {
+                $selectedQuery->where('sale_items.inventory_item_id', $productId);
+            }
+            
+            $topProducts = (clone $selectedQuery)
+                ->groupBy('sale_items.inventory_item_id', 'sale_items.item_name', 'sale_items.item_sku')
+                ->orderBy('total_quantity', 'desc')
+                ->limit(10)
+                ->get();
+            
+            if ($topProducts->count() > 0) {
+                // Get previous period data
+                $previousQuery = SaleItem::select('sale_items.inventory_item_id', 'sale_items.item_name', 'sale_items.item_sku')
+                    ->selectRaw('SUM(sale_items.quantity) as total_quantity')
+                    ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+                    ->join('inventory_items', 'sale_items.inventory_item_id', '=', 'inventory_items.id')
+                    ->where('sales.status', 'completed')
+                    ->where('inventory_items.is_active', true)
+                    ->whereBetween('sales.created_at', [$previousStartDate, $previousEndDate]);
+                
+                if ($productCategory === 'aftercare') {
+                    $previousQuery->where('inventory_items.category', 'Aftercare Products');
+                } elseif ($productCategory === 'treatment') {
+                    $previousQuery->where('inventory_items.category', '!=', 'Aftercare Products');
+                }
+                
+                if ($productId) {
+                    $previousQuery->where('sale_items.inventory_item_id', $productId);
+                }
+                
+                $previousProducts = (clone $previousQuery)
+                    ->groupBy('sale_items.inventory_item_id', 'sale_items.item_name', 'sale_items.item_sku')
+                    ->get()
+                    ->keyBy('inventory_item_id');
+                
+                foreach ($topProducts as $product) {
+                    $previousData = $previousProducts->get($product->inventory_item_id);
+                    $data[] = [
+                        'name' => $product->item_name,
+                        'selected_period' => (int)$product->total_quantity,
+                        'previous_period' => $previousData ? (int)$previousData->total_quantity : 0,
+                    ];
+                }
+            }
+        } else {
+            // Usage metric: Get data from InventoryUsageLog + SaleItem (combined)
+            // Check if date range is valid (start date should not be after end date)
+            if ($startDate->gt($endDate)) {
+                // Invalid date range (e.g., future month), return empty data
+                return [];
+            }
+            
+            // Get usage logs data
+            $usageLogsQuery = InventoryUsageLog::select(
+                    'inventory_usage_logs.inventory_item_id',
+                    'inventory_usage_logs.item_name',
+                    'inventory_usage_logs.item_sku',
+                    DB::raw('SUM(CASE 
+                        WHEN inventory_usage_logs.is_ml_tracking = 1 THEN inventory_usage_logs.volume_ml_deducted
+                        ELSE inventory_usage_logs.quantity_deducted
+                    END) as total_usage'),
+                    DB::raw('COUNT(*) as usage_count')
+                )
+                ->join('inventory_items', 'inventory_usage_logs.inventory_item_id', '=', 'inventory_items.id')
+                ->where('inventory_items.is_active', true)
+                ->whereBetween('inventory_usage_logs.created_at', [$startDate, $endDate]);
+            
+            // Apply product category filter
+            if ($productCategory === 'aftercare') {
+                $usageLogsQuery->where('inventory_items.category', 'Aftercare Products');
+            } elseif ($productCategory === 'treatment') {
+                $usageLogsQuery->where('inventory_items.category', '!=', 'Aftercare Products');
+            }
+            
+            // Apply product filter if selected
+            if ($productId) {
+                $usageLogsQuery->where('inventory_usage_logs.inventory_item_id', $productId);
+            }
+            
+            $usageLogs = $usageLogsQuery
+                ->groupBy('inventory_usage_logs.inventory_item_id', 'inventory_usage_logs.item_name', 'inventory_usage_logs.item_sku')
+                ->get();
+            
+            // Get sales data (for treatment products, sales also count as usage)
+            $salesQuery = SaleItem::select(
+                    'sale_items.inventory_item_id',
+                    'sale_items.item_name',
+                    'sale_items.item_sku',
+                    DB::raw('SUM(sale_items.quantity) as total_sold'),
+                    DB::raw('COUNT(*) as sale_count')
+                )
+                ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+                ->join('inventory_items', 'sale_items.inventory_item_id', '=', 'inventory_items.id')
+                ->where('sales.status', 'completed')
+                ->where('inventory_items.is_active', true)
+                ->whereBetween('sales.created_at', [$startDate, $endDate]);
+            
+            // Apply product category filter
+            if ($productCategory === 'aftercare') {
+                $salesQuery->where('inventory_items.category', 'Aftercare Products');
+            } elseif ($productCategory === 'treatment') {
+                $salesQuery->where('inventory_items.category', '!=', 'Aftercare Products');
+            }
+            
+            // Apply product filter if selected
+            if ($productId) {
+                $salesQuery->where('sale_items.inventory_item_id', $productId);
+            }
+            
+            $sales = $salesQuery
+                ->groupBy('sale_items.inventory_item_id', 'sale_items.item_name', 'sale_items.item_sku')
+                ->get();
+            
+            // Combine usage logs and sales data
+            $combinedData = [];
+            
+            // Process usage logs
+            foreach ($usageLogs as $item) {
+                $key = $item->inventory_item_id;
+                $combinedData[$key] = [
+                    'name' => $item->item_name,
+                    'total_usage' => (float)$item->total_usage,
+                    'usage_count' => (int)$item->usage_count,
+                ];
+            }
+            
+            // Process sales and merge with usage logs
+            foreach ($sales as $item) {
+                $key = $item->inventory_item_id;
+                if (isset($combinedData[$key])) {
+                    // Merge sales data with existing usage data
+                    $combinedData[$key]['total_usage'] += (float)$item->total_sold;
+                    $combinedData[$key]['usage_count'] += (int)$item->sale_count;
+                } else {
+                    // Add new entry for products only sold
+                    $combinedData[$key] = [
+                        'name' => $item->item_name,
+                        'total_usage' => (float)$item->total_sold,
+                        'usage_count' => (int)$item->sale_count,
+                    ];
+                }
+            }
+            
+            // Sort by total_usage and limit to top 10
+            usort($combinedData, function($a, $b) {
+                return $b['total_usage'] <=> $a['total_usage'];
+            });
+            
+            if (count($combinedData) > 0) {
+                $data = array_slice($combinedData, 0, 10);
+            }
+        }
+        
+        return $data;
+    }
+
+    /**
+     * Export unified analytics data (Sales or Usage)
+     */
+    public function exportUnifiedAnalytics(Request $request)
+    {
+        $year = (int) $request->get('analytics_year', now()->year);
+        $month = $request->get('analytics_month');
+        $productCategory = $request->get('product_category', 'all');
+        $metricType = $request->get('metric_type', 'sales');
+        $productId = $request->get('analytics_product');
+        
+        // Convert month to integer if valid
+        $monthInt = null;
+        if ($month && $month !== 'all' && $month !== '' && is_numeric($month)) {
+            $monthInt = (int) $month;
+            if ($monthInt < 1 || $monthInt > 12) {
+                $monthInt = null;
+            }
+        }
+        
+        // Calculate date ranges
+        if ($monthInt) {
+            $startDate = Carbon::create($year, $monthInt, 1)->startOfMonth();
+            $endDate = Carbon::create($year, $monthInt, 1)->endOfMonth();
+            if ($endDate->isFuture()) {
+                $endDate = now()->endOfDay();
+            }
+            $previousStartDate = Carbon::create($year - 1, $monthInt, 1)->startOfMonth();
+            $previousEndDate = Carbon::create($year - 1, $monthInt, 1)->endOfMonth();
+            $periodLabel = Carbon::create($year, $monthInt, 1)->format('F Y');
+        } else {
+            $startDate = Carbon::create($year, 1, 1)->startOfYear();
+            $endDate = Carbon::create($year, 12, 31)->endOfYear();
+            if ($endDate->isFuture()) {
+                $endDate = now()->endOfDay();
+            }
+            $previousStartDate = Carbon::create($year - 1, 1, 1)->startOfYear();
+            $previousEndDate = Carbon::create($year - 1, 12, 31)->endOfYear();
+            $periodLabel = $year;
+        }
+        
+        // Get data using unified method
+        $data = $this->getUnifiedAnalyticsData(
+            $metricType,
+            $productCategory,
+            $productId,
+            $startDate,
+            $endDate,
+            $previousStartDate,
+            $previousEndDate
+        );
+        
+        // Generate filename
+        $categoryLabel = $productCategory === 'aftercare' ? 'Aftercare' : ($productCategory === 'treatment' ? 'Treatment' : 'All');
+        $metricLabel = $metricType === 'sales' ? 'Sales' : 'Usage';
+        $filename = "product-analytics-{$metricLabel}-{$categoryLabel}-{$periodLabel}.csv";
+        
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+        
+        $callback = function() use ($data, $metricType, $periodLabel) {
+            $file = fopen('php://output', 'w');
+            
+            if ($metricType === 'sales') {
+                fputcsv($file, ['Product Name', 'Selected Period (Units)', 'Previous Period (Units)', 'Period']);
+                foreach ($data as $row) {
+                    fputcsv($file, [
+                        $row['name'],
+                        $row['selected_period'] ?? 0,
+                        $row['previous_period'] ?? 0,
+                        $periodLabel
+                    ]);
+                }
+            } else {
+                fputcsv($file, ['Product Name', 'Total Usage (per container)', 'Usage Count', 'Period']);
+                foreach ($data as $row) {
+                    fputcsv($file, [
+                        $row['name'],
+                        $row['total_usage'] ?? 0,
+                        $row['usage_count'] ?? 0,
+                        $periodLabel
+                    ]);
+                }
+            }
+            
+            fclose($file);
+        };
+        
+        return response()->streamDownload($callback, $filename, $headers);
     }
 }

@@ -6,11 +6,11 @@ use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\AppointmentController as AdminAppointmentController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
-use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ForecastingController;
 use App\Http\Controllers\Client\AppointmentController as ClientAppointmentController;
 use App\Http\Controllers\Client\ServiceController as ClientServiceController;
+use App\Http\Controllers\Client\EmergencyStaffController;
 use App\Http\Controllers\Auth\RoleBasedLoginController;
 use App\Http\Controllers\WelcomeController;
 use App\Http\Controllers\ChatController;
@@ -107,6 +107,10 @@ Route::middleware(['auth', 'redirect.role'])->group(function () {
     Route::get('/available-staff', [ClientAppointmentController::class, 'getAvailableStaff'])->name('appointments.available-staff');
 });
 
+// Emergency staff replacement routes (public - accessed via email links)
+Route::get('/appointments/{appointment}/emergency-staff/accept', [EmergencyStaffController::class, 'accept'])->name('appointments.emergency-staff.accept');
+Route::get('/appointments/{appointment}/emergency-staff/cancel', [EmergencyStaffController::class, 'cancel'])->name('appointments.emergency-staff.cancel');
+
 // Chat routes
 Route::middleware(['auth'])->group(function () {
     Route::get('/chat', [ChatController::class, 'index'])->name('chat.index');
@@ -159,7 +163,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/dashboard/export/monthly-revenue', [AdminDashboardController::class, 'exportMonthlyRevenue'])->name('dashboard.export.monthly-revenue');
         Route::get('/dashboard/export/staff-scheduling', [AdminDashboardController::class, 'exportStaffScheduling'])->name('dashboard.export.staff-scheduling');
         Route::get('/dashboard/export/services-analytics', [AdminDashboardController::class, 'exportServicesAnalytics'])->name('dashboard.export.services-analytics');
-        Route::get('/dashboard/export/product-sales', [AdminDashboardController::class, 'exportProductSales'])->name('dashboard.export.product-sales');
+        Route::get('/dashboard/export/unified-analytics', [AdminDashboardController::class, 'exportUnifiedAnalytics'])->name('dashboard.export.unified-analytics');
         Route::get('/dashboard/export/top-services', [AdminDashboardController::class, 'exportTopServicesByRevenue'])->name('dashboard.export.top-services');
         Route::get('/dashboard/export/top-clients', [AdminDashboardController::class, 'exportTopClients'])->name('dashboard.export.top-clients');
 
@@ -180,6 +184,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/appointments/{appointment}/feedback-reply', [AdminAppointmentController::class, 'replyToFeedback'])->name('appointments.feedback-reply');
         Route::get('/appointments-calendar', [AdminAppointmentController::class, 'calendar'])->name('appointments.calendar');
         Route::get('/available-staff', [ClientAppointmentController::class, 'getAvailableStaff'])->name('appointments.available-staff');
+
+        // Admin Profile Management
+        Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+        Route::patch('/profile', [ProfileController::class, 'updateAdmin'])->name('profile.update');
 
         // Inventory Management - Full CRUD Resource Routes
         Route::resource('inventory', InventoryController::class)->parameters(['inventory' => 'inventoryItem']);
@@ -205,10 +213,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/sales/{sale}', [\App\Http\Controllers\Admin\SalesController::class, 'show'])->name('sales.show');
         Route::get('/sales-export', [\App\Http\Controllers\Admin\SalesController::class, 'export'])->name('sales.export');
 
-        // Analytics
-        Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics');
-        Route::get('/analytics/export', [AnalyticsController::class, 'export'])->name('analytics.export');
-        Route::post('/analytics/import', [AnalyticsController::class, 'import'])->name('analytics.import');
 
         // Forecasting
         Route::get('/forecasting', [ForecastingController::class, 'index'])->name('forecasting');

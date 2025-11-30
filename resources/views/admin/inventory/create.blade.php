@@ -172,13 +172,7 @@
                                             class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
                                         <option value="">Select unit</option>
                                         <option value="mL" {{ old('content_unit') == 'mL' ? 'selected' : '' }}>mL</option>
-                                        <option value="L" {{ old('content_unit') == 'L' ? 'selected' : '' }}>L</option>
-                                        <option value="g" {{ old('content_unit') == 'g' ? 'selected' : '' }}>g</option>
-                                        <option value="kg" {{ old('content_unit') == 'kg' ? 'selected' : '' }}>kg</option>
                                         <option value="pc" {{ old('content_unit') == 'pc' ? 'selected' : '' }}>pc</option>
-                                        <option value="pcs" {{ old('content_unit') == 'pcs' ? 'selected' : '' }}>pcs</option>
-                                        <option value="oz" {{ old('content_unit') == 'oz' ? 'selected' : '' }}>oz</option>
-                                        <option value="fl oz" {{ old('content_unit') == 'fl oz' ? 'selected' : '' }}>fl oz</option>
                                     </select>
                                     @error('content_unit')
                                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>

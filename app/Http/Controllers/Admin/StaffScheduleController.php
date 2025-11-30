@@ -243,7 +243,8 @@ class StaffScheduleController extends Controller
                   ->whereNotNull('end_time');
             })
             ->whereDoesntHave('staffUnavailabilities', function($q) use ($date) {
-                $q->where('unavailable_date', $date);
+                $q->where('unavailable_date', $date)
+                  ->where('approval_status', 'approved'); // Only exclude approved leaves
             });
 
         if ($specialization) {

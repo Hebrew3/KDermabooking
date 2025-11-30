@@ -142,6 +142,8 @@
                                 <input type="date" 
                                        name="appointment_date" 
                                        id="appointment_date" 
+                                       min="{{ date('Y-m-d') }}"
+                                       max="{{ date('Y-m-d', strtotime('+30 days')) }}"
                                        value="{{ old('appointment_date', $appointment->appointment_date->format('Y-m-d')) }}"
                                        required 
                                        class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
@@ -198,60 +200,10 @@
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
                             </div>
-
-                            <!-- Payment Status -->
-                            <div>
-                                <label for="payment_status" class="block text-sm font-medium text-gray-700 mb-2">
-                                    Payment Status <span class="text-red-500">*</span>
-                                </label>
-                                <select name="payment_status" id="payment_status" required class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
-                                    <option value="unpaid" {{ (old('payment_status', $appointment->payment_status) === 'unpaid') ? 'selected' : '' }}>Unpaid</option>
-                                    <option value="partial" {{ (old('payment_status', $appointment->payment_status) === 'partial') ? 'selected' : '' }}>Partial</option>
-                                    <option value="paid" {{ (old('payment_status', $appointment->payment_status) === 'paid') ? 'selected' : '' }}>Paid</option>
-                                    <option value="refunded" {{ (old('payment_status', $appointment->payment_status) === 'refunded') ? 'selected' : '' }}>Refunded</option>
-                                </select>
-                                @error('payment_status')
-                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                @enderror
-                            </div>
                         </div>
 
                         <!-- Notes Section -->
                         <div class="mt-8 space-y-6">
-                            <h3 class="text-lg font-medium text-gray-900">Notes</h3>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <!-- Admin Notes -->
-                                <div>
-                                    <label for="notes" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Admin Notes
-                                    </label>
-                                    <textarea name="notes" 
-                                              id="notes" 
-                                              rows="4" 
-                                              placeholder="Internal notes and instructions..."
-                                              class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">{{ old('notes', $appointment->notes) }}</textarea>
-                                    @error('notes')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
-
-                                <!-- Staff Notes -->
-                                <div>
-                                    <label for="staff_notes" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Staff Notes
-                                    </label>
-                                    <textarea name="staff_notes" 
-                                              id="staff_notes" 
-                                              rows="4" 
-                                              placeholder="Treatment notes and observations..."
-                                              class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">{{ old('staff_notes', $appointment->staff_notes) }}</textarea>
-                                    @error('staff_notes')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
-                            </div>
-
                             <!-- Client Notes (Read-only) -->
                             @if($appointment->client_notes)
                             <div>

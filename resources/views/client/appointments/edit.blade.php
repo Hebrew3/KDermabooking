@@ -96,6 +96,7 @@
                                    name="appointment_date" 
                                    id="appointment_date" 
                                    min="{{ date('Y-m-d') }}"
+                                   max="{{ date('Y-m-d', strtotime('+30 days')) }}"
                                    value="{{ old('appointment_date', $appointment->appointment_date->format('Y-m-d')) }}"
                                    required 
                                    class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">

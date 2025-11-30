@@ -35,7 +35,9 @@
                                 Appointment Date <span class="text-red-500">*</span>
                             </label>
                             <input type="date" name="appointment_date" id="appointment_date"
-                                min="{{ date('Y-m-d') }}" value="{{ old('appointment_date') }}" required
+                                min="{{ date('Y-m-d') }}"
+                                max="{{ date('Y-m-d', strtotime('+30 days')) }}"
+                                value="{{ old('appointment_date') }}" required
                                 class="w-full border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500">
                             @error('appointment_date')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>

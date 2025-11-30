@@ -50,9 +50,6 @@
                                 <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full {{ $appointment->status_color }}">
                                     {{ ucfirst(str_replace('_', ' ', $appointment->status)) }}
                                 </span>
-                                <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full {{ $appointment->payment_status_color }}">
-                                    {{ ucfirst(str_replace('_', ' ', $appointment->payment_status)) }}
-                                </span>
                                 @if($appointment->isLate())
                                     <span class="inline-flex items-center px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800 animate-pulse" title="Client is {{ $appointment->getMinutesLate() }} minutes late">
                                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -243,12 +243,16 @@ class User extends Authenticatable
             return false;
         }
 
-        // Check for unavailabilities
+        // Check for approved leave requests only
+        // Note: This method checks if a specific time point is unavailable
+        // For duration-based checks, use the controller's logic
         $unavailability = $this->staffUnavailabilities()
-            ->forDate($date)
+            ->forDate($date) // This scope already filters by approved status
             ->where(function($query) use ($time) {
                 $query->whereNull('start_time') // All day unavailability
+                      ->orWhereNull('end_time') // All day unavailability
                       ->orWhere(function($q) use ($time) {
+                          // Time-specific unavailability - check if time falls within range
                           $q->where('start_time', '<=', $time)
                             ->where('end_time', '>=', $time);
                       });

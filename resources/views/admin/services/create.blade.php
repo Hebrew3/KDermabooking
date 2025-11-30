@@ -237,6 +237,49 @@
         let productRowIndex = 0;
         const oldProducts = @json(old('treatment_products', []));
 
+        // Get selected product IDs (excluding current row)
+        function getSelectedProductIds(excludeIndex = null) {
+            const selectedIds = [];
+            const selects = document.querySelectorAll('.product-select');
+            selects.forEach((select, index) => {
+                const row = select.closest('.flex.items-start');
+                if (row && row.dataset.index !== excludeIndex && select.value) {
+                    selectedIds.push(select.value);
+                }
+            });
+            return selectedIds;
+        }
+
+        // Update product dropdowns to filter out already selected products
+        function updateProductDropdowns(excludeIndex = null) {
+            const selectedIds = getSelectedProductIds(excludeIndex);
+            const selects = document.querySelectorAll('.product-select');
+            
+            selects.forEach((select, index) => {
+                const row = select.closest('.flex.items-start');
+                const currentIndex = row ? row.dataset.index : null;
+                const currentValue = select.value;
+                
+                // Clear and rebuild options
+                select.innerHTML = '<option value="">Select Product</option>';
+                
+                inventoryItems.forEach(item => {
+                    // Show option if:
+                    // 1. It's the currently selected product for this row, OR
+                    // 2. It's not selected in any other row
+                    if (item.id == currentValue || !selectedIds.includes(String(item.id))) {
+                        const option = document.createElement('option');
+                        option.value = item.id;
+                        option.textContent = `${item.name} (${item.category} - Stock: ${item.stock} ${item.unit})`;
+                        if (item.id == currentValue) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    }
+                });
+            });
+        }
+
         // Add product row
         function addProductRow(productId = '', quantity = 1, volumeUsedPerService = '') {
             const container = document.getElementById('linked-products-container');
@@ -244,17 +287,26 @@
             row.className = 'flex items-start space-x-4 p-4 bg-white border border-gray-200 rounded-lg';
             row.dataset.index = productRowIndex;
             
+            // Get selected product IDs excluding this new row
+            const selectedIds = getSelectedProductIds();
+            
             row.innerHTML = `
                 <div class="flex-1">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Product</label>
                     <select name="treatment_products[${productRowIndex}][product_id]" 
                             class="product-select w-full px-3 py-2 border border-purple-500 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                         <option value="">Select Product</option>
-                        ${inventoryItems.map(item => `
-                            <option value="${item.id}" ${productId == item.id ? 'selected' : ''}>
-                                ${item.name} (${item.category} - Stock: ${item.stock} ${item.unit})
-                            </option>
-                        `).join('')}
+                        ${inventoryItems.map(item => {
+                            // Only show if not already selected or if it's the current product
+                            if (productId == item.id || !selectedIds.includes(String(item.id))) {
+                                return `
+                                    <option value="${item.id}" ${productId == item.id ? 'selected' : ''}>
+                                        ${item.name} (${item.category} - Stock: ${item.stock} ${item.unit})
+                                    </option>
+                                `;
+                            }
+                            return '';
+                        }).filter(opt => opt).join('')}
                     </select>
                 </div>
                 <div class="w-32">
@@ -292,6 +344,13 @@
             
             container.appendChild(row);
             
+            // Add event listener for product selection change
+            const productSelect = row.querySelector('.product-select');
+            productSelect.addEventListener('change', function() {
+                // Update all dropdowns when a product is selected/deselected
+                updateProductDropdowns(row.dataset.index);
+            });
+            
             // Add event listeners for volume/quantity toggle
             const volumeInput = row.querySelector('.volume-input');
             const quantityInput = row.querySelector('.quantity-input');
@@ -328,6 +387,8 @@
         // Remove product row
         function removeProductRow(button) {
             button.closest('.flex.items-start').remove();
+            // Update all dropdowns after removal
+            updateProductDropdowns();
         }
 
         // Initialize with old values or add one empty row

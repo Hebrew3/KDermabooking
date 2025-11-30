@@ -210,56 +210,75 @@
                 </div>
             </div>
 
-            <!-- Product Sales Analytics -->
+            <!-- Unified Product Analytics (Sales & Usage) -->
             <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center space-x-3">
-                        <div class="h-10 w-10 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg flex items-center justify-center">
+                        <div class="h-10 w-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center">
                             <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                             </svg>
                         </div>
                         <div>
-                            <h3 class="text-lg font-semibold text-gray-800">Product Sales Analytics</h3>
-                            <p class="text-sm text-gray-600">Top-selling products comparison</p>
+                            <h3 class="text-lg font-semibold text-gray-800">Product Analytics</h3>
+                            <p class="text-sm text-gray-600">Sales & Usage analytics</p>
                         </div>
                     </div>
                     <!-- Filters and Export -->
-                    <div class="flex items-center space-x-3">
-                        <a href="{{ route('admin.dashboard.export.product-sales', request()->only(['year', 'month', 'product_id'])) }}" 
+                    <div class="flex items-center space-x-2 flex-wrap">
+                        <a href="{{ route('admin.dashboard.export.unified-analytics', request()->only(['analytics_year', 'analytics_month', 'product_category', 'metric_type', 'analytics_product'])) }}" 
                            class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200 flex items-center space-x-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
                             <span>Export CSV</span>
                         </a>
-                        <select id="yearFilter" class="bg-white border-2 border-gray-300 rounded-lg px-4 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm transition-all duration-200">
+                        <!-- Metric Type Toggle -->
+                        <div class="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+                            <button type="button" id="metricTypeSales" class="px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 {{ ($metricType ?? 'sales') === 'sales' ? 'bg-indigo-500 text-white' : 'text-gray-700 hover:text-gray-900' }}">
+                                Sales
+                            </button>
+                            <button type="button" id="metricTypeUsage" class="px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 {{ ($metricType ?? 'sales') === 'usage' ? 'bg-indigo-500 text-white' : 'text-gray-700 hover:text-gray-900' }}">
+                                Usage
+                            </button>
+                        </div>
+                        <select id="analyticsYearFilter" class="bg-white border-2 border-gray-300 rounded-lg px-4 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all duration-200">
                             @for($y = now()->year; $y >= now()->year - 5; $y--)
-                                <option value="{{ $y }}" {{ $year == $y ? 'selected' : '' }}>{{ $y }}</option>
+                                <option value="{{ $y }}" {{ ($analyticsYear ?? now()->year) == $y ? 'selected' : '' }}>{{ $y }}</option>
                             @endfor
                         </select>
-                        <select id="monthFilter" class="bg-white border-2 border-gray-300 rounded-lg px-4 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm transition-all duration-200">
+                        <select id="analyticsMonthFilter" class="bg-white border-2 border-gray-300 rounded-lg px-4 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all duration-200">
                             <option value="">All Months</option>
                             @for($m = 1; $m <= 12; $m++)
-                                <option value="{{ $m }}" {{ $month == $m ? 'selected' : '' }}>{{ date('F', mktime(0, 0, 0, $m, 1)) }}</option>
+                                <option value="{{ $m }}" {{ ($analyticsMonth ?? null) == $m ? 'selected' : '' }}>{{ date('F', mktime(0, 0, 0, $m, 1)) }}</option>
                             @endfor
                         </select>
-                        <select id="productFilter" class="bg-white border-2 border-gray-300 rounded-lg px-4 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm transition-all duration-200 min-w-[200px]">
+                        <select id="productCategoryFilter" class="bg-white border-2 border-gray-300 rounded-lg px-4 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all duration-200">
+                            <option value="all" {{ ($productCategory ?? 'all') === 'all' ? 'selected' : '' }}>All Products</option>
+                            <option value="aftercare" {{ ($productCategory ?? 'all') === 'aftercare' ? 'selected' : '' }}>Aftercare Products</option>
+                            <option value="treatment" {{ ($productCategory ?? 'all') === 'treatment' ? 'selected' : '' }}>Treatment Products</option>
+                        </select>
+                        <select id="analyticsProductFilter" class="bg-white border-2 border-gray-300 rounded-lg px-4 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all duration-200 min-w-[200px]">
                             <option value="">All Products</option>
-                            @if(isset($allProducts) && is_iterable($allProducts))
-                                @foreach($allProducts as $prod)
-                                    @if(isset($prod) && is_object($prod))
-                                        <option value="{{ $prod->id ?? '' }}" {{ isset($productId) && $productId == ($prod->id ?? null) ? 'selected' : '' }}>{{ $prod->name ?? '' }}</option>
-                                    @endif
-                                @endforeach
-                            @endif
+                            @foreach($allAnalyticsProducts ?? [] as $product)
+                                <option value="{{ $product->id }}" {{ ($analyticsProductId ?? null) == $product->id ? 'selected' : '' }}>{{ $product->name }}</option>
+                            @endforeach
                         </select>
                     </div>
                 </div>
                 <div class="h-80">
-                    <canvas id="productSalesChart"></canvas>
+                    <div id="unifiedAnalyticsEmptyState" class="hidden flex items-center justify-center h-full text-gray-500">
+                        <div class="text-center">
+                            <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                            <p class="text-lg font-medium">No data available</p>
+                            <p class="text-sm mt-1">No data found for the selected filters.</p>
+                        </div>
                     </div>
+                    <canvas id="unifiedAnalyticsChart"></canvas>
                 </div>
+            </div>
 
             <!-- New Dashboard Sections -->
             <div class="grid grid-cols-1 lg:grid-cols-1 gap-8 mb-8">
@@ -820,7 +839,7 @@
             if (month) params.staff_month = month;
             
             // Preserve all other filters
-            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'year', 'month', 'product', 'services_revenue_year', 'services_revenue_month', 'clients_year', 'clients_month'].forEach(key => {
+            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'year', 'month', 'product', 'services_revenue_year', 'services_revenue_month', 'clients_year', 'clients_month', 'treatment_products_year', 'treatment_products_month'].forEach(key => {
                 const value = urlParams.get(key);
                 if (value && !params[key]) params[key] = value;
             });
@@ -839,7 +858,7 @@
             if (year) params.staff_year = year;
             
             // Preserve all other filters
-            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'year', 'month', 'product', 'services_revenue_year', 'services_revenue_month', 'clients_year', 'clients_month'].forEach(key => {
+            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'year', 'month', 'product', 'services_revenue_year', 'services_revenue_month', 'clients_year', 'clients_month', 'treatment_products_year', 'treatment_products_month'].forEach(key => {
                 const value = urlParams.get(key);
                 if (value && !params[key]) params[key] = value;
             });
@@ -933,56 +952,124 @@
         top_services: @json($topServices)
     });
 
-    // Product Sales Analytics Chart
-    let productSalesChart;
-    const productSalesCtx = document.getElementById('productSalesChart').getContext('2d');
+    // Unified Product Analytics Chart
+    let unifiedAnalyticsChart;
+    const unifiedAnalyticsCtx = document.getElementById('unifiedAnalyticsChart');
+    const unifiedAnalyticsEmptyState = document.getElementById('unifiedAnalyticsEmptyState');
     
-    function updateProductSalesChartData(productData) {
-        if (productSalesChart) {
-            productSalesChart.destroy();
+    const unifiedAnalyticsData = @json($unifiedAnalyticsData ?? []);
+    const currentMetricType = '{{ $metricType ?? "sales" }}';
+    
+    function updateUnifiedAnalyticsChart(data, metricType) {
+        // Hide empty state
+        if (unifiedAnalyticsEmptyState) {
+            unifiedAnalyticsEmptyState.classList.add('hidden');
         }
         
-        productSalesChart = new Chart(productSalesCtx, {
+        // Show chart
+        if (unifiedAnalyticsCtx) {
+            unifiedAnalyticsCtx.style.display = 'block';
+        }
+        
+        // Destroy existing chart
+        if (unifiedAnalyticsChart) {
+            unifiedAnalyticsChart.destroy();
+        }
+        
+        // Check if data is empty
+        if (!data || data.length === 0) {
+            if (unifiedAnalyticsCtx) {
+                unifiedAnalyticsCtx.style.display = 'none';
+            }
+            if (unifiedAnalyticsEmptyState) {
+                unifiedAnalyticsEmptyState.classList.remove('hidden');
+            }
+            return;
+        }
+        
+        const ctx = unifiedAnalyticsCtx.getContext('2d');
+        
+        let datasets = [];
+        let yAxisTitle = '';
+        
+        if (metricType === 'sales') {
+            // Sales metric: Show comparison with previous period
+            datasets = [
+                {
+                    label: 'Selected Period',
+                    data: data.map(p => p.selected_period || 0),
+                    backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 2,
+                    borderRadius: 8,
+                },
+                {
+                    label: 'Previous Period',
+                    data: data.map(p => p.previous_period || 0),
+                    backgroundColor: 'rgba(156, 163, 175, 0.8)',
+                    borderColor: 'rgba(156, 163, 175, 1)',
+                    borderWidth: 2,
+                    borderRadius: 8,
+                }
+            ];
+            yAxisTitle = 'Units Sold';
+        } else {
+            // Usage metric: Show total usage
+            datasets = [{
+                label: 'Total Usage',
+                data: data.map(p => p.total_usage || 0),
+                backgroundColor: 'rgba(147, 51, 234, 0.8)',
+                borderColor: 'rgba(147, 51, 234, 1)',
+                borderWidth: 2,
+                borderRadius: 8,
+            }];
+            yAxisTitle = 'Total Usage (per container)';
+        }
+        
+        unifiedAnalyticsChart = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: productData.map(p => p.name),
-                datasets: [
-                    {
-                        label: 'Selected Period',
-                        data: productData.map(p => p.selected_period),
-                        backgroundColor: 'rgba(59, 130, 246, 0.8)',
-                        borderColor: 'rgba(59, 130, 246, 1)',
-                        borderWidth: 2,
-                        borderRadius: 8,
-                    },
-                    {
-                        label: 'Previous Period',
-                        data: productData.map(p => p.previous_period),
-                        backgroundColor: 'rgba(156, 163, 175, 0.8)',
-                        borderColor: 'rgba(156, 163, 175, 1)',
-                        borderWidth: 2,
-                        borderRadius: 8,
-                    }
-                ]
+                labels: data.map(p => p.name),
+                datasets: datasets
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
+                        display: true,
                         position: 'top',
                         labels: {
                             padding: 15,
-                        usePointStyle: true,
-                        font: {
-                            size: 12
+                            usePointStyle: true,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (metricType === 'usage') {
+                                    label += context.parsed.y.toFixed(2);
+                                    const dataIndex = context.dataIndex;
+                                    if (data[dataIndex] && data[dataIndex].usage_count) {
+                                        label += ' (Used ' + data[dataIndex].usage_count + ' times)';
+                                    }
+                                } else {
+                                    label += context.parsed.y;
+                                }
+                                return label;
+                            }
                         }
                     }
-                }
-            },
+                },
                 scales: {
                     x: {
-                        stacked: false,
                         ticks: {
                             maxRotation: 45,
                             minRotation: 45
@@ -996,7 +1083,7 @@
                         beginAtZero: true,
                         title: {
                             display: true,
-                            text: 'Units Sold'
+                            text: yAxisTitle
                         }
                     }
                 }
@@ -1004,29 +1091,92 @@
         });
     }
     
-    // Initialize Product Sales Chart with initial data
-    updateProductSalesChartData(@json($productSalesData));
+    // Initialize chart with initial data
+    if (unifiedAnalyticsCtx) {
+        updateUnifiedAnalyticsChart(unifiedAnalyticsData, currentMetricType);
+    }
     
-    // Filter change handlers for Product Sales
-    const yearFilter = document.getElementById('yearFilter');
-    const monthFilter = document.getElementById('monthFilter');
-    const productFilter = document.getElementById('productFilter');
+    // Update product filter dropdown based on category
+    function updateProductFilterDropdown() {
+        const category = document.getElementById('productCategoryFilter')?.value || 'all';
+        const productFilter = document.getElementById('analyticsProductFilter');
+        
+        if (!productFilter) return;
+        
+        // This will be handled by page reload, but we can update the options if needed
+        // For now, we'll just reload the page when category changes
+    }
     
-    if (yearFilter) {
-        yearFilter.addEventListener('change', function() {
-            updateProductSalesChart();
+    // Filter change handlers
+    const analyticsYearFilter = document.getElementById('analyticsYearFilter');
+    const analyticsMonthFilter = document.getElementById('analyticsMonthFilter');
+    const productCategoryFilter = document.getElementById('productCategoryFilter');
+    const analyticsProductFilter = document.getElementById('analyticsProductFilter');
+    const metricTypeSales = document.getElementById('metricTypeSales');
+    const metricTypeUsage = document.getElementById('metricTypeUsage');
+    
+    function updateUnifiedAnalytics() {
+        const year = analyticsYearFilter?.value || new Date().getFullYear();
+        const month = analyticsMonthFilter?.value || '';
+        const category = productCategoryFilter?.value || 'all';
+        const product = analyticsProductFilter?.value || '';
+        const metricType = metricTypeSales?.classList.contains('bg-indigo-500') ? 'sales' : 'usage';
+        
+        // Build params
+        const params = new URLSearchParams();
+        params.append('analytics_year', year);
+        if (month) params.append('analytics_month', month);
+        params.append('product_category', category);
+        params.append('metric_type', metricType);
+        if (product) params.append('analytics_product', product);
+        
+        // Preserve other unrelated filters from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const otherFilters = ['revenue_year', 'revenue_month', 'services_year', 'services_month', 
+                             'staff_year', 'staff_month', 'clients_year', 'clients_month', 
+                             'services_revenue_year', 'services_revenue_month'];
+        
+        otherFilters.forEach(filter => {
+            const value = urlParams.get(filter);
+            if (value) params.append(filter, value);
+        });
+        
+        window.location.href = '{{ route("admin.dashboard") }}?' + params.toString();
+    }
+    
+    if (analyticsYearFilter) {
+        analyticsYearFilter.addEventListener('change', updateUnifiedAnalytics);
+    }
+    
+    if (analyticsMonthFilter) {
+        analyticsMonthFilter.addEventListener('change', updateUnifiedAnalytics);
+    }
+    
+    if (productCategoryFilter) {
+        productCategoryFilter.addEventListener('change', updateUnifiedAnalytics);
+    }
+    
+    if (analyticsProductFilter) {
+        analyticsProductFilter.addEventListener('change', updateUnifiedAnalytics);
+    }
+    
+    if (metricTypeSales) {
+        metricTypeSales.addEventListener('click', function() {
+            metricTypeSales.classList.add('bg-indigo-500', 'text-white');
+            metricTypeSales.classList.remove('text-gray-700');
+            metricTypeUsage.classList.remove('bg-indigo-500', 'text-white');
+            metricTypeUsage.classList.add('text-gray-700');
+            updateUnifiedAnalytics();
         });
     }
     
-    if (monthFilter) {
-        monthFilter.addEventListener('change', function() {
-            updateProductSalesChart();
-        });
-    }
-    
-    if (productFilter) {
-        productFilter.addEventListener('change', function() {
-            updateProductSalesChart();
+    if (metricTypeUsage) {
+        metricTypeUsage.addEventListener('click', function() {
+            metricTypeUsage.classList.add('bg-indigo-500', 'text-white');
+            metricTypeUsage.classList.remove('text-gray-700');
+            metricTypeSales.classList.remove('bg-indigo-500', 'text-white');
+            metricTypeSales.classList.add('text-gray-700');
+            updateUnifiedAnalytics();
         });
     }
     
@@ -1172,7 +1322,7 @@
             if (servicesRevenueMonth) params.services_revenue_month = servicesRevenueMonth;
             
             // Preserve all other filters
-            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'staff_year', 'staff_month', 'year', 'month', 'product', 'clients_year', 'clients_month'].forEach(key => {
+            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'staff_year', 'staff_month', 'year', 'month', 'product', 'clients_year', 'clients_month', 'treatment_products_year', 'treatment_products_month'].forEach(key => {
                 const value = urlParams.get(key);
                 if (value && !params[key]) params[key] = value;
             });
@@ -1191,7 +1341,7 @@
             if (servicesRevenueYear) params.services_revenue_year = servicesRevenueYear;
             
             // Preserve all other filters
-            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'staff_year', 'staff_month', 'year', 'month', 'product', 'clients_year', 'clients_month'].forEach(key => {
+            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'staff_year', 'staff_month', 'year', 'month', 'product', 'clients_year', 'clients_month', 'treatment_products_year', 'treatment_products_month'].forEach(key => {
                 const value = urlParams.get(key);
                 if (value && !params[key]) params[key] = value;
             });
@@ -1214,7 +1364,7 @@
             if (clientsMonth) params.clients_month = clientsMonth;
             
             // Preserve all other filters
-            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'staff_year', 'staff_month', 'year', 'month', 'product', 'services_revenue_year', 'services_revenue_month'].forEach(key => {
+            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'staff_year', 'staff_month', 'year', 'month', 'product', 'services_revenue_year', 'services_revenue_month', 'treatment_products_year', 'treatment_products_month'].forEach(key => {
                 const value = urlParams.get(key);
                 if (value && !params[key]) params[key] = value;
             });
@@ -1233,7 +1383,7 @@
             if (clientsYear) params.clients_year = clientsYear;
             
             // Preserve all other filters
-            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'staff_year', 'staff_month', 'year', 'month', 'product', 'services_revenue_year', 'services_revenue_month'].forEach(key => {
+            ['revenue_year', 'revenue_month', 'services_year', 'services_month', 'staff_year', 'staff_month', 'year', 'month', 'product', 'services_revenue_year', 'services_revenue_month', 'treatment_products_year', 'treatment_products_month'].forEach(key => {
                 const value = urlParams.get(key);
                 if (value && !params[key]) params[key] = value;
             });
@@ -1259,12 +1409,14 @@
     
     // Function to update all analytics charts via AJAX
     async function updateAllAnalytics() {
-        const year = document.getElementById('yearFilter')?.value || '';
-        const month = document.getElementById('monthFilter')?.value || '';
-        const product = document.getElementById('productFilter')?.value || '';
+        // This function is deprecated - unified analytics now uses page reload
+        // Keeping for backward compatibility but it won't update unified analytics
+        const year = document.getElementById('analyticsYearFilter')?.value || '';
+        const month = document.getElementById('analyticsMonthFilter')?.value || '';
+        const product = document.getElementById('analyticsProductFilter')?.value || '';
         
         // Show loading indicator
-        const charts = ['staffSchedulingChart', 'servicesMonthlyChart', 'productSalesChart'];
+        const charts = ['staffSchedulingChart', 'servicesMonthlyChart', 'unifiedAnalyticsChart'];
         charts.forEach(chartId => {
             const canvas = document.getElementById(chartId);
             if (canvas) {
@@ -1342,13 +1494,8 @@
                 initServicesMonthlyChart(data.services_monthly);
             }
             
-            // Update Product Sales Chart
-            if (data.product_sales) {
-                updateProductSalesChartData(data.product_sales);
-            } else {
-                // If no product sales data, show empty chart
-                updateProductSalesChartData([]);
-            }
+            // Unified Analytics Chart is now handled by page reload
+            // No need to update via AJAX
             
         } catch (error) {
             console.error('Error updating analytics:', error);
@@ -1360,39 +1507,5 @@
         }
     }
     
-    function updateProductSalesChart() {
-        // Get all current filter values
-        const year = document.getElementById('yearFilter')?.value || '';
-        const month = document.getElementById('monthFilter')?.value || '';
-        const product = document.getElementById('productFilter')?.value || '';
-        
-        // Preserve other filters from URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const revenueYear = urlParams.get('revenue_year') || '';
-        const revenueMonth = urlParams.get('revenue_month') || '';
-        const servicesYear = urlParams.get('services_year') || '';
-        const servicesMonth = urlParams.get('services_month') || '';
-        const staffYear = urlParams.get('staff_year') || '';
-        const staffMonth = urlParams.get('staff_month') || '';
-        
-        // Build params with all filters
-        const params = new URLSearchParams();
-        if (year) params.append('year', year);
-        if (month) params.append('month', month);
-        if (product) params.append('product', product);
-        if (revenueYear) params.append('revenue_year', revenueYear);
-        if (revenueMonth) params.append('revenue_month', revenueMonth);
-        if (servicesYear) params.append('services_year', servicesYear);
-        if (servicesMonth) params.append('services_month', servicesMonth);
-        if (staffYear) params.append('staff_year', staffYear);
-        if (staffMonth) params.append('staff_month', staffMonth);
-        
-        // Update URL without reload
-        const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
-        window.history.pushState({}, '', newUrl);
-        
-        // Update all charts via AJAX
-        updateAllAnalytics();
-    }
 </script>
 </x-app-layout>

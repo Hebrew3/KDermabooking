@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Services\PHPMailerService;
 
@@ -48,9 +49,65 @@ class UserController extends Controller
         // Sort by specified column
         $sortBy = $request->get('sort_by', 'created_at');
         $sortOrder = $request->get('sort_order', 'desc');
-        $query->orderBy($sortBy, $sortOrder);
-
-        $users = $query->paginate(10)->withQueryString();
+        
+        // If filtering by client role and no custom sort is specified, 
+        // prioritize clients based on appointment status (active appointments first)
+        if (($request->get('role') === 'client' || ($request->get('role') === null && !$request->filled('role'))) && $sortBy === 'created_at') {
+            // Get appointment statistics for each client
+            $appointmentStats = DB::table('appointments')
+                ->select('client_id',
+                    DB::raw('MAX(CASE 
+                        WHEN status IN (\'pending\', \'confirmed\', \'in_progress\') THEN 1
+                        WHEN status = \'completed\' THEN 2
+                        WHEN status IN (\'cancelled\', \'no_show\') THEN 3
+                        ELSE 4
+                    END) as status_priority'),
+                    DB::raw('MAX(CASE 
+                        WHEN status IN (\'pending\', \'confirmed\', \'in_progress\') THEN created_at
+                        ELSE NULL
+                    END) as latest_active_appointment')
+                )
+                ->whereNotNull('client_id')
+                ->groupBy('client_id')
+                ->get()
+                ->keyBy('client_id');
+            
+            // Get all users and sort them in memory to avoid GROUP BY issues
+            $allUsers = $query->get();
+            
+            // Sort users based on appointment statistics
+            $sortedUsers = $allUsers->sortBy(function($user) use ($appointmentStats) {
+                $stats = $appointmentStats->get($user->id);
+                $statusPriority = $stats ? $stats->status_priority : 4;
+                $latestAppointment = $stats ? $stats->latest_active_appointment : null;
+                
+                // Return a sort key: priority first, then appointment date (nulls last), then created_at
+                return [
+                    $statusPriority,
+                    $latestAppointment ? 0 : 1, // 0 = has appointment, 1 = no appointment (nulls last)
+                    $latestAppointment ? strtotime($latestAppointment) : 0,
+                    strtotime($user->created_at) * -1 // Descending order
+                ];
+            })->values();
+            
+            // Manually paginate the sorted collection
+            $page = $request->get('page', 1);
+            $perPage = 10;
+            $total = $sortedUsers->count();
+            $items = $sortedUsers->forPage($page, $perPage);
+            
+            // Create a LengthAwarePaginator instance
+            $users = new \Illuminate\Pagination\LengthAwarePaginator(
+                $items,
+                $total,
+                $perPage,
+                $page,
+                ['path' => $request->url(), 'query' => $request->query()]
+            );
+        } else {
+            $query->orderBy($sortBy, $sortOrder);
+            $users = $query->paginate(10)->withQueryString();
+        }
 
         return view('admin.users.index', compact('users'));
     }

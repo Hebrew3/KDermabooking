@@ -37,7 +37,15 @@ class ClientController extends Controller
 
         $clients = $query->orderBy('first_name')->paginate(15);
 
-        return view('staff.clients', compact('clients'));
+        // Get new appointments assigned to this staff (created in the last 24 hours)
+        $newAppointments = Appointment::where('staff_id', $staff->id)
+            ->where('created_at', '>=', now()->subHours(24))
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->with(['client', 'service'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return view('staff.clients', compact('clients', 'newAppointments'));
     }
 
     /**

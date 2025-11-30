@@ -21,8 +21,17 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): View
     {
+        $user = $request->user();
+        
+        // Return appropriate view based on user role
+        if ($user->isAdmin()) {
+            return view('admin.profile', [
+                'user' => $user,
+            ]);
+        }
+        
         return view('profile.edit', [
-            'user' => $request->user(),
+            'user' => $user,
         ]);
     }
 
@@ -34,7 +43,11 @@ class ProfileController extends Controller
         $user = $request->user();
         
         // Return appropriate view based on user role
-        if ($user->isStaffMember()) {
+        if ($user->isAdmin()) {
+            return view('admin.profile', [
+                'user' => $user,
+            ]);
+        } elseif ($user->isStaffMember()) {
             return view('staff.profile', [
                 'user' => $user,
             ]);
@@ -51,6 +64,12 @@ class ProfileController extends Controller
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
         $user = $request->user();
+        
+        // Route to admin update if user is admin
+        if ($user->isAdmin()) {
+            return $this->updateAdmin($request);
+        }
+        
         $validated = $request->validated();
 
         // Handle profile picture removal
@@ -81,6 +100,83 @@ class ProfileController extends Controller
         $user->save();
 
         return Redirect::route('profile.edit')->with('success', 'Profile updated successfully!');
+    }
+
+    /**
+     * Update the admin profile information.
+     */
+    public function updateAdmin(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $action = $request->input('action', 'personal_info');
+
+        if ($action === 'change_password') {
+            return $this->updatePasswordForAdmin($request);
+        } else {
+            return $this->updatePersonalInfoForAdmin($request);
+        }
+    }
+
+    /**
+     * Update personal information for admin.
+     */
+    private function updatePersonalInfoForAdmin(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'gender' => ['required', 'in:male,female,other'],
+            'email' => [
+                'required',
+                'string',
+                'lowercase',
+                'email',
+                'max:255',
+                Rule::unique('users')->ignore($request->user()->id),
+            ],
+            'mobile_number' => ['required', 'string', 'regex:/^[0-9]{11}$/', 'size:11'],
+            'address' => ['required', 'string', 'max:500'],
+            'birth_date' => ['required', 'date', 'before:today'],
+        ]);
+
+        $user = $request->user();
+        $user->fill($validated);
+
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
+        }
+
+        $user->save();
+
+        return Redirect::route('admin.profile')->with('success', 'Profile updated successfully!');
+    }
+
+    /**
+     * Update password for admin.
+     */
+    private function updatePasswordForAdmin(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'current_password'],
+            'password' => ['required', Password::defaults(), 'confirmed'],
+        ]);
+
+        $user = $request->user();
+        $user->password = Hash::make($validated['password']);
+        $user->save();
+
+        // Send password change notification email
+        try {
+            $phpMailerService = new PHPMailerService();
+            $userName = $user->first_name ? ($user->first_name . ' ' . $user->last_name) : null;
+            $phpMailerService->sendPasswordChangeEmail($user->email, $userName, 'admin');
+        } catch (\Exception $e) {
+            // Log error but don't fail the password update
+            \Log::error('Failed to send password change notification email to admin: ' . $e->getMessage());
+        }
+
+        return Redirect::route('admin.profile')->with('success', 'Password updated successfully!');
     }
 
     /**

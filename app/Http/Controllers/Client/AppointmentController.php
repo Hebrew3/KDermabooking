@@ -80,8 +80,15 @@ class AppointmentController extends Controller
             'staff_id' => 'nullable|exists:users,id',
             'appointment_date' => ['required', 'date', function ($attribute, $value, $fail) {
                 $date = TimeHelper::parseDate($value);
-                if (!$date || $date->lt(TimeHelper::today())) {
+                $today = TimeHelper::today();
+                $maxDate = $today->copy()->addDays(30);
+                
+                if (!$date) {
+                    $fail('Invalid date format.');
+                } elseif ($date->lt($today)) {
                     $fail('The appointment date must be today or a future date.');
+                } elseif ($date->gt($maxDate)) {
+                    $fail('You can only schedule an appointment within 30 days from today.');
                 }
             }],
             'appointment_time' => 'required|date_format:H:i',
@@ -105,10 +112,134 @@ class AppointmentController extends Controller
 
         $service = Service::findOrFail($request->service_id);
 
-        if (!$this->hasAvailableStaffForSlot($service, $request->appointment_date, $request->appointment_time)) {
-            return back()->withErrors([
-                'appointment_time' => 'No staff members are available for this service at the selected time. Please choose a different time or date.'
-            ])->withInput();
+        \Log::info('Appointment booking validation started', [
+            'service_id' => $service->id,
+            'date' => $request->appointment_date,
+            'time' => $request->appointment_time,
+            'staff_id' => $request->staff_id,
+            'client_id' => Auth::id()
+        ]);
+
+        // If a specific staff is selected, check if that staff is available
+        // Otherwise, check if any staff is available for this service
+        if ($request->staff_id) {
+            $selectedStaff = User::find($request->staff_id);
+            if (!$selectedStaff || !$selectedStaff->is_active) {
+                \Log::warning('Selected staff not found or inactive', [
+                    'staff_id' => $request->staff_id
+                ]);
+                return back()->withErrors([
+                    'staff_id' => 'The selected staff member is not available.'
+                ])->withInput();
+            }
+            
+            // Check if selected staff is assigned to this service
+            if (!$selectedStaff->isAssignedToService($service->id)) {
+                \Log::warning('Selected staff not assigned to service', [
+                    'staff_id' => $request->staff_id,
+                    'service_id' => $service->id
+                ]);
+                return back()->withErrors([
+                    'staff_id' => 'The selected staff member is not assigned to this service.'
+                ])->withInput();
+            }
+            
+            // Check if selected staff is available at this time
+            $availableStaff = $this->getAvailableStaffForSlot($service, $request->appointment_date, $request->appointment_time);
+            \Log::info('Available staff check for selected staff', [
+                'selected_staff_id' => $request->staff_id,
+                'available_staff_ids' => $availableStaff->pluck('id')->toArray(),
+                'available_count' => $availableStaff->count(),
+                'is_selected_staff_available' => $availableStaff->contains('id', $request->staff_id)
+            ]);
+            
+            // If the selected staff is not in the available list, do a simpler check
+            if (!$availableStaff->contains('id', $request->staff_id)) {
+                // Fallback: Check if staff has a basic schedule for this day (less strict check)
+                $dateCarbon = \Carbon\Carbon::parse($request->appointment_date);
+                $dayOfWeek = $dateCarbon->format('l');
+                $dayOfWeekLower = strtolower($dayOfWeek);
+                
+                $hasBasicSchedule = $selectedStaff->staffSchedules()
+                    ->where(function($q) use ($dayOfWeek, $dayOfWeekLower) {
+                        $q->where('day_of_week', $dayOfWeek)
+                          ->orWhere('day_of_week', $dayOfWeekLower)
+                          ->orWhereRaw('LOWER(day_of_week) = ?', [$dayOfWeekLower]);
+                    })
+                    ->where('is_available', true)
+                    ->whereNotNull('start_time')
+                    ->whereNotNull('end_time')
+                    ->exists();
+                
+                // Check if staff has approved leave for this date/time
+                $normalizedDate = $dateCarbon->format('Y-m-d');
+                $normalizedTime = preg_replace('/:\d{2}$/', '', $request->appointment_time);
+                
+                $hasApprovedLeave = $selectedStaff->staffUnavailabilities()
+                    ->whereDate('unavailable_date', $normalizedDate)
+                    ->where('approval_status', 'approved')
+                    ->get()
+                    ->filter(function($leave) use ($normalizedTime, $service) {
+                        // All-day leave
+                        if (empty($leave->start_time) || empty($leave->end_time)) {
+                            return true;
+                        }
+                        // Check time overlap
+                        try {
+                            $appointmentStart = \Carbon\Carbon::createFromFormat('H:i', $normalizedTime);
+                            $appointmentEnd = $appointmentStart->copy()->addMinutes($service->duration ?? 60);
+                            $leaveStart = \Carbon\Carbon::createFromFormat('H:i', preg_replace('/:\d{2}$/', '', $leave->start_time));
+                            $leaveEnd = \Carbon\Carbon::createFromFormat('H:i', preg_replace('/:\d{2}$/', '', $leave->end_time));
+                            return $appointmentStart->lt($leaveEnd) && $appointmentEnd->gt($leaveStart);
+                        } catch (\Exception $e) {
+                            return false;
+                        }
+                    })
+                    ->isNotEmpty();
+                
+                // If staff has basic schedule and no approved leave, allow the booking
+                if ($hasBasicSchedule && !$hasApprovedLeave) {
+                    \Log::info('Selected staff passed fallback check (basic schedule, no approved leave)', [
+                        'staff_id' => $request->staff_id,
+                        'date' => $request->appointment_date,
+                        'time' => $request->appointment_time
+                    ]);
+                    // Allow booking to proceed
+                } else {
+                    \Log::warning('Selected staff not available at time (failed both strict and fallback checks)', [
+                        'staff_id' => $request->staff_id,
+                        'available_staff_ids' => $availableStaff->pluck('id')->toArray(),
+                        'has_basic_schedule' => $hasBasicSchedule,
+                        'has_approved_leave' => $hasApprovedLeave,
+                        'date' => $request->appointment_date,
+                        'time' => $request->appointment_time,
+                        'service_id' => $service->id
+                    ]);
+                    return back()->withErrors([
+                        'appointment_time' => 'The selected staff member is not available at this time. Please choose a different time or date.'
+                    ])->withInput();
+                }
+            }
+        } else {
+            // No specific staff selected - check if any staff is available
+            $hasAvailable = $this->hasAvailableStaffForSlot($service, $request->appointment_date, $request->appointment_time);
+            \Log::info('Available staff check (no specific staff selected)', [
+                'has_available' => $hasAvailable,
+                'service_id' => $service->id,
+                'date' => $request->appointment_date,
+                'time' => $request->appointment_time
+            ]);
+            
+            if (!$hasAvailable) {
+                \Log::warning('No staff available for service', [
+                    'service_id' => $service->id,
+                    'date' => $request->appointment_date,
+                    'time' => $request->appointment_time
+                ]);
+                return back()->withErrors([
+                    'appointment_time' => 'No staff members are available for this service at the selected time. Please choose a different time or date.'
+                ])->withInput();
+            }
         }
 
         $appointment = Appointment::create([
@@ -199,8 +330,15 @@ class AppointmentController extends Controller
             'staff_id' => 'nullable|exists:users,id',
             'appointment_date' => ['required', 'date', function ($attribute, $value, $fail) {
                 $date = TimeHelper::parseDate($value);
-                if (!$date || $date->lt(TimeHelper::today())) {
+                $today = TimeHelper::today();
+                $maxDate = $today->copy()->addDays(30);
+                
+                if (!$date) {
+                    $fail('Invalid date format.');
+                } elseif ($date->lt($today)) {
                     $fail('The appointment date must be today or a future date.');
+                } elseif ($date->gt($maxDate)) {
+                    $fail('You can only schedule an appointment within 30 days from today.');
                 }
             }],
             'appointment_time' => 'required|date_format:H:i',
@@ -426,6 +564,39 @@ class AppointmentController extends Controller
                         if (!$businessStart || !$businessEnd) {
                             throw new \Exception('Failed to parse schedule times');
                         }
+                        
+                        // CRITICAL: Ensure minimum business hours (9:00 AM - 6:00 PM)
+                        // If calculated end time is too early (before 6:00 PM), use default
+                        $minimumEndTime = TimeHelper::parseTime('18:00');
+                        if (!$minimumEndTime) {
+                            $minimumEndTime = \Carbon\Carbon::today(TimeHelper::getTimezone())->setTime(18, 0, 0);
+                        }
+                        
+                        // If calculated business end is earlier than minimum, use minimum
+                        if ($businessEnd->lt($minimumEndTime)) {
+                            \Log::warning('Calculated business end time is too early, using minimum (6:00 PM)', [
+                                'calculated_end' => $businessEnd->format('H:i'),
+                                'minimum_end' => $minimumEndTime->format('H:i'),
+                                'earliest_start' => $earliestStart,
+                                'latest_end' => $latestEnd
+                            ]);
+                            $businessEnd = $minimumEndTime;
+                        }
+                        
+                        // Also ensure minimum start time (9:00 AM)
+                        $minimumStartTime = TimeHelper::parseTime('09:00');
+                        if (!$minimumStartTime) {
+                            $minimumStartTime = \Carbon\Carbon::today(TimeHelper::getTimezone())->setTime(9, 0, 0);
+                        }
+                        
+                        // If calculated business start is later than minimum, use minimum
+                        if ($businessStart->gt($minimumStartTime)) {
+                            \Log::info('Using minimum start time (9:00 AM)', [
+                                'calculated_start' => $businessStart->format('H:i'),
+                                'minimum_start' => $minimumStartTime->format('H:i')
+                            ]);
+                            $businessStart = $minimumStartTime;
+                        }
                     } catch (\Exception $e) {
                         \Log::error('Error parsing schedule times: ' . $e->getMessage(), [
                             'earliest_start' => $earliestStart,
@@ -440,7 +611,7 @@ class AppointmentController extends Controller
                         }
                         if (!$businessEnd) {
                             $businessEnd = \Carbon\Carbon::today(TimeHelper::getTimezone())->setTime(18, 0, 0);
-                    }
+                        }
                     }
                     
                     // Ensure we have valid Carbon instances before logging
@@ -449,7 +620,9 @@ class AppointmentController extends Controller
                         'earliest_start' => $earliestStart,
                         'latest_end' => $latestEnd,
                         'business_start' => $businessStart->format('H:i'),
-                        'business_end' => $businessEnd->format('H:i')
+                        'business_end' => $businessEnd->format('H:i'),
+                        'staff_schedules_count' => $staffSchedules->count(),
+                        'all_end_times' => $staffSchedules->pluck('end_time')->toArray()
                     ]);
                     }
                 }
@@ -465,8 +638,16 @@ class AppointmentController extends Controller
                     $duration = 60; // Default to 60 minutes
                 }
 
+                \Log::info('Generating time slots:', [
+                    'business_start' => $businessStart->format('H:i'),
+                    'business_end' => $businessEnd->format('H:i'),
+                    'service_duration' => $duration
+                ]);
+
                 // Generate time slots in 30-minute intervals
                 // Check if the appointment can fit before the business end time
+                // IMPORTANT: We need to ensure the appointment ENDS before or at business end time
+                // So we check: current time + duration <= business end time
                 while ($current->copy()->addMinutes($duration)->lte($businessEnd)) {
                     $timeSlots[] = $current->format('H:i');
                     $current->addMinutes(30); // 30-minute intervals
@@ -476,11 +657,20 @@ class AppointmentController extends Controller
                         \Log::warning('Too many time slots generated, breaking loop', [
                             'count' => count($timeSlots),
                             'business_start' => $businessStart->format('H:i'),
-                            'business_end' => $businessEnd->format('H:i')
+                            'business_end' => $businessEnd->format('H:i'),
+                            'last_slot' => end($timeSlots)
                         ]);
                         break;
                     }
                 }
+                
+                \Log::info('Time slots generated:', [
+                    'total_slots' => count($timeSlots),
+                    'first_slot' => !empty($timeSlots) ? $timeSlots[0] : 'none',
+                    'last_slot' => !empty($timeSlots) ? end($timeSlots) : 'none',
+                    'business_start' => $businessStart->format('H:i'),
+                    'business_end' => $businessEnd->format('H:i')
+                ]);
             } catch (\Exception $e) {
                 \Log::error('Error generating time slots: ' . $e->getMessage(), [
                     'business_start' => $businessStart->format('H:i'),
@@ -616,7 +806,45 @@ class AppointmentController extends Controller
                     return false;
                 }
                 
-                // Check if staff is available at this time
+                // Check if staff is available at this time (considering appointment duration)
+                // Calculate appointment end time
+                $appointmentStart = TimeHelper::parseTime($time);
+                if (!$appointmentStart) {
+                    return false;
+                }
+                $appointmentEnd = $appointmentStart->copy()->addMinutes($duration ?? 60);
+                
+                // Check for approved leave requests that overlap with appointment time
+                // IMPORTANT: Only approved leaves exclude staff
+                // Pending/rejected leaves are NOT checked here
+                $hasOverlappingLeave = $staff->staffUnavailabilities()
+                    ->where('unavailable_date', $date)
+                    ->where('approval_status', 'approved') // Only check approved leaves
+                    ->get()
+                    ->filter(function($leave) use ($appointmentStart, $appointmentEnd) {
+                        // All-day leave
+                        if (empty($leave->start_time) || empty($leave->end_time)) {
+                            return true;
+                        }
+                        
+                        // Parse leave time range
+                        $leaveStart = TimeHelper::parseTime($leave->start_time);
+                        $leaveEnd = TimeHelper::parseTime($leave->end_time);
+                        
+                        if (!$leaveStart || !$leaveEnd) {
+                            return false;
+                        }
+                        
+                        // Check if appointment time overlaps with leave time range
+                        return $appointmentStart->lt($leaveEnd) && $appointmentEnd->gt($leaveStart);
+                    })
+                    ->isNotEmpty();
+                
+                if ($hasOverlappingLeave) {
+                    return false;
+                }
+                
+                // Also check basic availability (schedule)
                 if (!$staff->isAvailableAt($date, $time)) {
                     return false;
                 }
@@ -652,33 +880,30 @@ class AppointmentController extends Controller
                 return !$conflictingAppointment;
             });
             } else {
-                // Find available staff for each time slot
+                // IMPORTANT: For Preferred Time dropdown, show ALL possible time slots
+                // Staff filtering will happen when client selects a Preferred Time
+                // Only exclude time slots that are blocked by existing appointments
+                // This allows clients to see all available times, then staff will be filtered based on their selection
                 $availableSlots = [];
                 foreach ($timeSlots as $time) {
-                    try {
-                        // Skip if this time slot is blocked
-                        if (in_array($time, $blockedSlots)) {
-                            continue;
-                        }
-
-                        // Get available staff for this time slot (already filtered by service assignment)
-                        $availableStaff = $this->getAvailableStaffForSlot($service, $date, $time);
-
-                        \Log::info('Available staff for time slot:', [
-                            'time' => $time,
-                            'available_staff_count' => $availableStaff->count(),
-                            'available_staff' => $availableStaff->pluck('name')->toArray()
-                        ]);
-
-                        if ($availableStaff->count() > 0) {
-                            $availableSlots[] = $time;
-                        }
-                    } catch (\Exception $e) {
-                        \Log::warning('Error checking availability for time slot ' . $time . ': ' . $e->getMessage());
-                        // Continue to next time slot
+                    // Only skip if this time slot is blocked by existing appointments
+                    // Don't filter based on staff availability here - that happens when staff list is loaded
+                    if (in_array($time, $blockedSlots)) {
+                        \Log::debug("Time slot {$time} is blocked by existing appointment");
                         continue;
                     }
+                    
+                    // Include all other time slots (staff filtering happens in getAvailableStaff)
+                    $availableSlots[] = $time;
                 }
+                
+                \Log::info('Time slots for Preferred Time dropdown (not filtered by staff availability):', [
+                    'total_slots' => count($timeSlots),
+                    'blocked_slots' => count($blockedSlots),
+                    'available_slots' => count($availableSlots),
+                    'first_slot' => !empty($availableSlots) ? $availableSlots[0] : 'none',
+                    'last_slot' => !empty($availableSlots) ? end($availableSlots) : 'none'
+                ]);
             }
 
             // Debug: Log final results
@@ -793,7 +1018,8 @@ class AppointmentController extends Controller
                     'staffSpecializations',
                     'assignedServices', // Load all assigned services, not filtered
                     'staffUnavailabilities' => function($query) use ($date) {
-                        $query->where('unavailable_date', $date);
+                        $query->where('unavailable_date', $date)
+                              ->where('approval_status', 'approved'); // Only load approved leaves
                     }
                 ])
                 ->orderBy('first_name')
@@ -873,27 +1099,141 @@ class AppointmentController extends Controller
                             return null;
                         }
                         
-                        // Check for unavailabilities at this specific time (use loaded relationship)
-                        $hasTimeUnavailability = $staff->staffUnavailabilities
-                            ->filter(function($unavailability) use ($date, $time) {
-                                // Must match the date
-                                if ($unavailability->unavailable_date != $date) {
-                                    return false;
-                                }
-                                
-                                // All-day unavailability (null or empty string)
-                                if (empty($unavailability->start_time)) {
-                                    return true;
-                                }
-                                
-                                // Time-specific unavailability - check if time falls within range
-                                return $unavailability->start_time <= $time && 
-                                       $unavailability->end_time >= $time;
-                            })
-                            ->isNotEmpty();
+                        // Check for approved leave requests at this specific time
+                        // IMPORTANT: Only approved leaves exclude staff from availability
+                        // Staff WITHOUT approved leaves should ALWAYS appear in the list
+                        // The relationship is already filtered to approved only (line 847-850), so this collection
+                        // should only contain approved leaves for this date. If collection is empty, staff has no approved leaves.
+                        
+                        // Check if staff has any approved leaves loaded
+                        // If collection is empty, staff has NO approved leaves and should appear
+                        // The relationship is already filtered to only load approved leaves (line 847-850)
+                        $hasTimeUnavailability = false;
+                        
+                        if ($staff->staffUnavailabilities->isNotEmpty()) {
+                            // Staff has approved leaves - check if any overlap with selected time
+                            $hasTimeUnavailability = $staff->staffUnavailabilities
+                                ->filter(function($unavailability) use ($date, $time, $service, $staff) {
+                                    // CRITICAL: Only approved leaves exclude staff
+                                    // Since relationship is already filtered, all items should be approved
+                                    // But we double-check for safety
+                                    if ($unavailability->approval_status !== 'approved') {
+                                        \Log::warning("Staff {$staff->id} has non-approved leave in filtered collection - IGNORING", [
+                                            'approval_status' => $unavailability->approval_status,
+                                            'leave_id' => $unavailability->id
+                                        ]);
+                                        return false; // Ignore pending/rejected leaves
+                                    }
+                                    
+                                    // Must match the date (compare as strings to avoid timezone issues)
+                                    $leaveDate = $unavailability->unavailable_date instanceof \Carbon\Carbon 
+                                        ? $unavailability->unavailable_date->format('Y-m-d')
+                                        : $unavailability->unavailable_date;
+                                    $appointmentDate = $date instanceof \Carbon\Carbon 
+                                        ? $date->format('Y-m-d')
+                                        : $date;
+                                    
+                                    if ($leaveDate != $appointmentDate) {
+                                        return false; // Different date, not relevant
+                                    }
+                                    
+                                    // All-day unavailability (null or empty string) - exclude for entire day
+                                    if (empty($unavailability->start_time) || empty($unavailability->end_time)) {
+                                        return true;
+                                    }
+                                    
+                                    // Calculate appointment end time (considering service duration)
+                                    // Validate and normalize time format (remove seconds if present)
+                                    if (empty($time) || !preg_match('/^\d{1,2}:\d{2}/', $time)) {
+                                        \Log::warning("Invalid appointment time format: {$time}");
+                                        return false;
+                                    }
+                                    $normalizedTime = preg_replace('/:\d{2}$/', '', $time); // Remove seconds if present
+                                    try {
+                                        $appointmentStart = \Carbon\Carbon::createFromFormat('H:i', $normalizedTime);
+                                        if (!$appointmentStart) {
+                                            \Log::warning("Failed to parse appointment time: {$time}");
+                                            return false;
+                                        }
+                                    } catch (\Exception $e) {
+                                        \Log::warning("Exception parsing appointment time: {$time} - " . $e->getMessage());
+                                        return false;
+                                    }
+                                    $appointmentEnd = $appointmentStart->copy()->addMinutes($service->duration ?? 60);
+                                    
+                                    // Parse leave time range - normalize time format
+                                    if (empty($unavailability->start_time) || empty($unavailability->end_time)) {
+                                        return false; // Skip if times are empty (already handled as all-day above)
+                                    }
+                                    
+                                    $normalizedLeaveStart = preg_replace('/:\d{2}$/', '', $unavailability->start_time);
+                                    $normalizedLeaveEnd = preg_replace('/:\d{2}$/', '', $unavailability->end_time);
+                                    
+                                    // Validate leave time formats
+                                    if (!preg_match('/^\d{1,2}:\d{2}/', $normalizedLeaveStart) || !preg_match('/^\d{1,2}:\d{2}/', $normalizedLeaveEnd)) {
+                                        \Log::warning("Invalid leave time format", [
+                                            'start_time' => $unavailability->start_time,
+                                            'end_time' => $unavailability->end_time
+                                        ]);
+                                        return false;
+                                    }
+                                    
+                                    try {
+                                        $leaveStart = \Carbon\Carbon::createFromFormat('H:i', $normalizedLeaveStart);
+                                        $leaveEnd = \Carbon\Carbon::createFromFormat('H:i', $normalizedLeaveEnd);
+                                        
+                                        if (!$leaveStart || !$leaveEnd) {
+                                            \Log::warning("Failed to parse leave times", [
+                                                'start_time' => $unavailability->start_time,
+                                                'end_time' => $unavailability->end_time
+                                            ]);
+                                            return false;
+                                        }
+                                    } catch (\Exception $e) {
+                                        \Log::warning("Exception parsing leave times: " . $e->getMessage(), [
+                                            'start_time' => $unavailability->start_time,
+                                            'end_time' => $unavailability->end_time
+                                        ]);
+                                        return false;
+                                    }
+                                    
+                                    // Check if appointment time overlaps with leave time range
+                                    // CRITICAL: Exclude staff if selected time falls within leave_start to leave_end
+                                    // Examples:
+                                    // - Staff Leave: 7:00 AM - 12:00 PM, Client selects 8:00 AM → 8:00 falls in [7:00-12:00] → Overlap → Staff NOT appear
+                                    // - Staff Leave: 7:00 AM - 12:00 PM, Client selects 3:00 PM → 3:00 PM NOT in [7:00-12:00] → No overlap → Staff appear
+                                    // Overlap formula: appointment starts before leave ends AND appointment ends after leave starts
+                                    $overlaps = $appointmentStart->lt($leaveEnd) && $appointmentEnd->gt($leaveStart);
+                                    
+                                    if ($overlaps) {
+                                        \Log::info("Staff {$staff->id} has overlapping approved leave", [
+                                            'leave_time' => "{$unavailability->start_time} - {$unavailability->end_time}",
+                                            'appointment_time' => "{$time} - {$appointmentEnd->format('H:i')}",
+                                            'overlaps' => true
+                                        ]);
+                                    }
+                                    
+                                    return $overlaps;
+                                })
+                                ->isNotEmpty();
+                        } else {
+                            // Staff has NO approved leaves - they should appear
+                            \Log::info("Staff {$staff->id} ({$staff->name}) has NO approved leaves for {$date} - WILL APPEAR", [
+                                'staff_id' => $staff->id,
+                                'staff_name' => $staff->name,
+                                'date' => $date,
+                                'time' => $time
+                            ]);
+                        }
                         
                         if ($hasTimeUnavailability) {
-                            \Log::info("Staff {$staff->id} ({$staff->name}) is not available at {$date} {$time} due to unavailability - FILTERED OUT");
+                            \Log::info("Staff {$staff->id} ({$staff->name}) is not available at {$date} {$time} due to approved leave - FILTERED OUT", [
+                                'staff_id' => $staff->id,
+                                'staff_name' => $staff->name,
+                                'date' => $date,
+                                'time' => $time,
+                                'has_approved_leave' => true
+                            ]);
                             return null;
                         }
                         
@@ -905,21 +1245,72 @@ class AppointmentController extends Controller
                     } else {
                         // No time specified - staff is available if they have a schedule for this day
                         // and are not marked as unavailable for the entire day
-                        // Check if there's an all-day unavailability (use loaded relationship)
+                        // Check if there's an all-day approved leave (use loaded relationship)
+                        // IMPORTANT: Only approved leaves exclude staff from availability
+                        // Staff WITHOUT approved leaves should ALWAYS appear in the list
                         $hasAllDayUnavailability = $staff->staffUnavailabilities
-                            ->filter(function($unavailability) use ($date) {
+                            ->filter(function($unavailability) use ($date, $staff) {
+                                // CRITICAL: Only approved leaves exclude staff
+                                // Pending and rejected leaves are ignored
+                                // Since relationship is already filtered to approved, this is a safety check
+                                if ($unavailability->approval_status !== 'approved') {
+                                    \Log::info("Staff {$staff->id} has non-approved all-day leave - IGNORING", [
+                                        'approval_status' => $unavailability->approval_status,
+                                        'leave_id' => $unavailability->id
+                                    ]);
+                                    return false; // Ignore pending/rejected leaves
+                                }
+                                
+                                // Must match the date (compare as strings to avoid timezone issues)
+                                $leaveDate = $unavailability->unavailable_date instanceof \Carbon\Carbon 
+                                    ? $unavailability->unavailable_date->format('Y-m-d')
+                                    : $unavailability->unavailable_date;
+                                $appointmentDate = $date instanceof \Carbon\Carbon 
+                                    ? $date->format('Y-m-d')
+                                    : $date;
+                                
                                 // Must match the date and be all-day (null or empty string)
-                                return $unavailability->unavailable_date == $date && 
-                                       empty($unavailability->start_time);
+                                $isAllDay = empty($unavailability->start_time) || empty($unavailability->end_time);
+                                $dateMatches = $leaveDate == $appointmentDate;
+                                
+                                return $dateMatches && $isAllDay;
                             })
                             ->isNotEmpty();
                         
                         if ($hasAllDayUnavailability) {
-                            \Log::info("Staff {$staff->id} ({$staff->name}) has all-day unavailability on {$date} - FILTERED OUT");
+                            \Log::info("Staff {$staff->id} ({$staff->name}) has all-day approved leave on {$date} - FILTERED OUT", [
+                                'staff_id' => $staff->id,
+                                'staff_name' => $staff->name,
+                                'date' => $date,
+                                'has_approved_all_day_leave' => true
+                            ]);
                             return null;
+                        } else {
+                            // Staff has no approved all-day leave - they should appear
+                            \Log::info("Staff {$staff->id} ({$staff->name}) has NO approved all-day leave on {$date} - WILL APPEAR", [
+                                'staff_id' => $staff->id,
+                                'staff_name' => $staff->name,
+                                'date' => $date,
+                                'total_unavailabilities_loaded' => $staff->staffUnavailabilities->count(),
+                                'all_are_approved' => $staff->staffUnavailabilities->every(function($u) {
+                                    return $u->approval_status === 'approved';
+                                })
+                            ]);
                         }
                     }
 
+                    // Final check: Staff should appear if they passed all filters
+                    // Log for debugging
+                    \Log::info("Staff {$staff->id} ({$staff->name}) PASSED all filters - WILL APPEAR in list", [
+                        'staff_id' => $staff->id,
+                        'staff_name' => $staff->name,
+                        'date' => $date,
+                        'time' => $time ?? 'not specified',
+                        'has_approved_leaves' => $staff->staffUnavailabilities->where('approval_status', 'approved')->isNotEmpty(),
+                        'total_unavailabilities_loaded' => $staff->staffUnavailabilities->count(),
+                        'approved_count' => $staff->staffUnavailabilities->where('approval_status', 'approved')->count()
+                    ]);
+                    
                     return [
                         'id' => $staff->id,
                         'first_name' => $staff->first_name,
@@ -1037,7 +1428,19 @@ class AppointmentController extends Controller
 
     private function hasAvailableStaffForSlot(Service $service, string $date, string $time): bool
     {
-        return $this->getAvailableStaffForSlot($service, $date, $time)->isNotEmpty();
+        $availableStaff = $this->getAvailableStaffForSlot($service, $date, $time);
+        $hasAvailable = $availableStaff->isNotEmpty();
+        
+        \Log::info('hasAvailableStaffForSlot result', [
+            'service_id' => $service->id,
+            'date' => $date,
+            'time' => $time,
+            'has_available' => $hasAvailable,
+            'available_count' => $availableStaff->count(),
+            'available_staff_ids' => $availableStaff->pluck('id')->toArray()
+        ]);
+        
+        return $hasAvailable;
     }
 
     private function getAvailableStaffForSlot(Service $service, string $date, string $time)
@@ -1046,6 +1449,18 @@ class AppointmentController extends Controller
         $dateCarbon = TimeHelper::parseDate($date);
         $dayOfWeek = $dateCarbon ? $dateCarbon->format('l') : date('l', strtotime($date)); // Returns "Monday", "Tuesday", etc.
         $dayOfWeekLower = strtolower($dayOfWeek);
+        
+        // Normalize date to Y-m-d format for database comparison
+        $normalizedDate = $dateCarbon ? $dateCarbon->format('Y-m-d') : date('Y-m-d', strtotime($date));
+        
+        \Log::info('getAvailableStaffForSlot called', [
+            'service_id' => $service->id,
+            'service_name' => $service->name,
+            'date' => $date,
+            'normalized_date' => $normalizedDate,
+            'time' => $time,
+            'day_of_week' => $dayOfWeek
+        ]);
         
         // Get ONLY staff who meet ALL criteria:
         // 1. Are active users
@@ -1079,8 +1494,19 @@ class AppointmentController extends Controller
             }, 'assignedServices' => function($query) use ($service) {
                 // Only load the specific service assignment
                 $query->where('services.id', $service->id);
+            }, 'staffUnavailabilities' => function($query) use ($normalizedDate) {
+                // Load approved leaves for this date to avoid N+1 queries
+                // Use normalized date format for comparison
+                $query->whereDate('unavailable_date', $normalizedDate)
+                      ->where('approval_status', 'approved');
             }])
             ->get();
+        
+        \Log::info('Initial staff query results', [
+            'total_staff_found' => $staffMembers->count(),
+            'staff_ids' => $staffMembers->pluck('id')->toArray(),
+            'normalized_date' => $normalizedDate
+        ]);
 
         return $staffMembers->filter(function($staff) use ($service, $date, $time) {
             // Check if staff account is active
@@ -1103,26 +1529,192 @@ class AppointmentController extends Controller
             }
             
             // Check if time is within schedule hours
-            if (!$schedule->isAvailableAtTime($time)) {
-                \Log::info("Staff {$staff->id} ({$staff->name}) time {$time} is not within schedule hours");
+            // Normalize time format before checking
+            $normalizedTimeForCheck = preg_replace('/:\d{2}$/', '', $time); // Remove seconds if present
+            try {
+                $isTimeAvailable = $schedule->isAvailableAtTime($normalizedTimeForCheck);
+                if (!$isTimeAvailable) {
+                    \Log::info("Staff {$staff->id} ({$staff->name}) time {$normalizedTimeForCheck} is not within schedule hours", [
+                        'schedule_start' => $schedule->start_time,
+                        'schedule_end' => $schedule->end_time,
+                        'requested_time' => $normalizedTimeForCheck
+                    ]);
+                    return false;
+                }
+            } catch (\Exception $e) {
+                \Log::warning("Error checking schedule time availability for staff {$staff->id}: " . $e->getMessage(), [
+                    'time' => $normalizedTimeForCheck,
+                    'schedule_start' => $schedule->start_time,
+                    'schedule_end' => $schedule->end_time
+                ]);
                 return false;
             }
             
-            // Check for unavailabilities
-            if (!$staff->isAvailableAt($date, $time)) {
-                \Log::info("Staff {$staff->id} ({$staff->name}) is not available at {$date} {$time} due to unavailability");
+            // Check for approved leave requests (considering appointment duration)
+            // IMPORTANT: Only approved leaves exclude staff from availability
+            // Pending/rejected leaves are NOT checked - staff will still appear in list
+            // Validate and normalize time format (remove seconds if present)
+            if (empty($time) || !preg_match('/^\d{1,2}:\d{2}/', $time)) {
+                \Log::warning("Invalid appointment time format in getAvailableStaffForSlot: {$time}");
+                return false;
+            }
+            $normalizedTime = preg_replace('/:\d{2}$/', '', $time); // Remove seconds if present
+            try {
+                $appointmentStart = \Carbon\Carbon::createFromFormat('H:i', $normalizedTime);
+                if (!$appointmentStart) {
+                    \Log::warning("Failed to parse appointment time in getAvailableStaffForSlot: {$time}");
+                    return false;
+                }
+            } catch (\Exception $e) {
+                \Log::warning("Exception parsing appointment time in getAvailableStaffForSlot: {$time} - " . $e->getMessage());
+                return false;
+            }
+            $appointmentEnd = $appointmentStart->copy()->addMinutes($service->duration ?? 60);
+            
+            // Normalize date for comparison
+            $dateCarbon = TimeHelper::parseDate($date);
+            $normalizedDate = $dateCarbon ? $dateCarbon->format('Y-m-d') : date('Y-m-d', strtotime($date));
+            
+            // Use loaded relationship if available, otherwise query directly
+            // The relationship is already loaded with approved leaves for this date
+            if ($staff->relationLoaded('staffUnavailabilities')) {
+                // Use loaded relationship - already filtered by date and approval_status
+                // Double-check date match in case of format mismatch
+                $staffLeaves = $staff->staffUnavailabilities->filter(function($leave) use ($normalizedDate) {
+                    $leaveDate = $leave->unavailable_date instanceof \Carbon\Carbon 
+                        ? $leave->unavailable_date->format('Y-m-d')
+                        : date('Y-m-d', strtotime($leave->unavailable_date));
+                    return $leaveDate === $normalizedDate;
+                });
+            } else {
+                // Fallback: query directly if relationship not loaded
+                $staffLeaves = $staff->staffUnavailabilities()
+                    ->whereDate('unavailable_date', $normalizedDate)
+                    ->where('approval_status', 'approved')
+                    ->get();
+            }
+            
+            \Log::info("Checking staff availability", [
+                'staff_id' => $staff->id,
+                'staff_name' => $staff->name,
+                'date' => $date,
+                'normalized_date' => $normalizedDate,
+                'time' => $time,
+                'loaded_leaves_count' => $staffLeaves->count(),
+                'has_loaded_relationship' => $staff->relationLoaded('staffUnavailabilities'),
+                'leaves_details' => $staffLeaves->map(function($leave) {
+                    return [
+                        'id' => $leave->id,
+                        'date' => $leave->unavailable_date instanceof \Carbon\Carbon 
+                            ? $leave->unavailable_date->format('Y-m-d')
+                            : $leave->unavailable_date,
+                        'start_time' => $leave->start_time,
+                        'end_time' => $leave->end_time,
+                        'approval_status' => $leave->approval_status
+                    ];
+                })->toArray()
+            ]);
+            
+            $hasOverlappingLeave = $staffLeaves
+                ->filter(function($leave) use ($appointmentStart, $appointmentEnd, $staff, $date, $time) {
+                    // All-day leave
+                    if (empty($leave->start_time) || empty($leave->end_time)) {
+                        \Log::info("Staff {$staff->id} has all-day approved leave on {$date}");
+                        return true;
+                    }
+                    
+                    // Parse leave time range - normalize time format
+                    // Validate leave time formats before parsing
+                    if (!preg_match('/^\d{1,2}:\d{2}/', $leave->start_time) || !preg_match('/^\d{1,2}:\d{2}/', $leave->end_time)) {
+                        \Log::warning("Invalid leave time format in getAvailableStaffForSlot", [
+                            'start_time' => $leave->start_time,
+                            'end_time' => $leave->end_time
+                        ]);
+                        return false;
+                    }
+                    
+                    $normalizedLeaveStart = preg_replace('/:\d{2}$/', '', $leave->start_time);
+                    $normalizedLeaveEnd = preg_replace('/:\d{2}$/', '', $leave->end_time);
+                    
+                    try {
+                        $leaveStart = \Carbon\Carbon::createFromFormat('H:i', $normalizedLeaveStart);
+                        $leaveEnd = \Carbon\Carbon::createFromFormat('H:i', $normalizedLeaveEnd);
+                        
+                        if (!$leaveStart || !$leaveEnd) {
+                            \Log::warning("Failed to parse leave times in getAvailableStaffForSlot", [
+                                'start_time' => $leave->start_time,
+                                'end_time' => $leave->end_time
+                            ]);
+                            return false;
+                        }
+                    } catch (\Exception $e) {
+                        \Log::warning("Exception parsing leave times in getAvailableStaffForSlot: " . $e->getMessage(), [
+                            'start_time' => $leave->start_time,
+                            'end_time' => $leave->end_time
+                        ]);
+                        return false;
+                    }
+                    
+                    // Check if appointment time overlaps with leave time range
+                    // CRITICAL: Exclude staff if selected time falls within leave_start to leave_end
+                    // Examples:
+                    // - Staff Leave: 7:00 AM - 12:00 PM, Client selects 8:00 AM → 8:00 falls in [7:00-12:00] → Overlap → Staff NOT appear
+                    // - Staff Leave: 7:00 AM - 12:00 PM, Client selects 3:00 PM → 3:00 PM NOT in [7:00-12:00] → No overlap → Staff appear
+                    // Overlap formula: appointment starts before leave ends AND appointment ends after leave starts
+                    // This ensures any appointment that intersects with leave time is excluded
+                    $overlaps = $appointmentStart->lt($leaveEnd) && $appointmentEnd->gt($leaveStart);
+                    
+                    if ($overlaps) {
+                        \Log::info("Staff {$staff->id} has overlapping approved leave", [
+                            'leave_time' => "{$leave->start_time} - {$leave->end_time}",
+                            'appointment_time' => "{$time} - {$appointmentEnd->format('H:i')}",
+                            'overlaps' => true
+                        ]);
+                    }
+                    
+                    return $overlaps;
+                })
+                ->isNotEmpty();
+            
+            if ($hasOverlappingLeave) {
+                \Log::info("Staff {$staff->id} ({$staff->name}) is not available at {$date} {$time} due to approved leave");
                 return false;
             }
             
             // Check for conflicting appointments
-            if ($this->hasConflictingAppointment($staff->id, $date, $time, $service->duration)) {
-                \Log::info("Staff {$staff->id} ({$staff->name}) has conflicting appointment at {$date} {$time}");
-                return false;
+            try {
+                $hasConflict = $this->hasConflictingAppointment($staff->id, $date, $time, $service->duration);
+                if ($hasConflict) {
+                    \Log::info("Staff {$staff->id} ({$staff->name}) has conflicting appointment at {$date} {$time}");
+                    return false;
+                }
+            } catch (\Exception $e) {
+                \Log::warning("Error checking conflicting appointments for staff {$staff->id}: " . $e->getMessage(), [
+                    'date' => $date,
+                    'time' => $time,
+                    'service_duration' => $service->duration
+                ]);
+                // Don't fail on error - assume no conflict if we can't check
             }
             
             // All checks passed - staff is available
+            \Log::info("Staff {$staff->id} ({$staff->name}) PASSED all availability checks", [
+                'staff_id' => $staff->id,
+                'date' => $date,
+                'time' => $time
+            ]);
             return true;
         })->values();
+        
+        \Log::info('Final available staff count in getAvailableStaffForSlot', [
+            'total_available' => $staffMembers->count(),
+            'available_staff_ids' => $staffMembers->pluck('id')->toArray(),
+            'service_id' => $service->id,
+            'date' => $date,
+            'time' => $time
+        ]);
+        
+        return $staffMembers;
     }
     
     /**

@@ -59,7 +59,10 @@ class ServiceController extends Controller
      */
     public function create(): View
     {
-        $inventoryItems = InventoryItem::active()->orderBy('name')->get();
+        $inventoryItems = InventoryItem::active()
+            ->where('category', '!=', 'Aftercare Products')
+            ->orderBy('name')
+            ->get();
         $inventoryItemsJson = $inventoryItems->map(function($item) {
             return [
                 'id' => $item->id,
@@ -148,7 +151,10 @@ class ServiceController extends Controller
     public function edit(Service $service): View
     {
         $service->load('treatmentProducts');
-        $inventoryItems = InventoryItem::active()->orderBy('name')->get();
+        $inventoryItems = InventoryItem::active()
+            ->where('category', '!=', 'Aftercare Products')
+            ->orderBy('name')
+            ->get();
         $inventoryItemsJson = $inventoryItems->map(function($item) {
             return [
                 'id' => $item->id,

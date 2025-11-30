@@ -9,7 +9,9 @@ use App\Models\User;
 use App\Models\Service;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Services\PHPMailerService;
 
 class AppointmentController extends Controller
 {
@@ -91,8 +93,15 @@ class AppointmentController extends Controller
             'staff_id' => 'nullable|exists:users,id',
             'appointment_date' => ['required', 'date', function ($attribute, $value, $fail) {
                 $date = TimeHelper::parseDate($value);
-                if (!$date || $date->lt(TimeHelper::today())) {
+                $today = TimeHelper::today();
+                $maxDate = $today->copy()->addDays(30);
+                
+                if (!$date) {
+                    $fail('Invalid date format.');
+                } elseif ($date->lt($today)) {
                     $fail('The appointment date must be today or a future date.');
+                } elseif ($date->gt($maxDate)) {
+                    $fail('You can only schedule an appointment within 30 days from today.');
                 }
             }],
             'appointment_time' => 'required|date_format:H:i',
@@ -165,7 +174,30 @@ class AppointmentController extends Controller
     {
         $clients = User::where('role', 'client')->orderBy('first_name')->get();
         $services = Service::active()->orderBy('name')->get();
-        $staff = User::whereIn('role', ['nurse', 'aesthetician'])->orderBy('first_name')->get();
+        
+        // Get day of week for the appointment date
+        $appointmentDate = $appointment->appointment_date instanceof Carbon 
+            ? $appointment->appointment_date 
+            : Carbon::parse($appointment->appointment_date);
+        $dayOfWeek = $appointmentDate->format('l'); // Returns "Monday", "Tuesday", etc.
+        $dayOfWeekLower = strtolower($dayOfWeek);
+        
+        // Filter staff to only show those who have a schedule for this day
+        $staff = User::whereIn('role', ['nurse', 'aesthetician'])
+            ->where('is_active', true)
+            ->whereHas('staffSchedules', function($query) use ($dayOfWeek, $dayOfWeekLower) {
+                // Match exact day format (capitalized) or lowercase
+                $query->where(function($q) use ($dayOfWeek, $dayOfWeekLower) {
+                    $q->where('day_of_week', $dayOfWeek)
+                      ->orWhere('day_of_week', $dayOfWeekLower)
+                      ->orWhereRaw('LOWER(day_of_week) = ?', [$dayOfWeekLower]);
+                })
+                ->where('is_available', true)
+                ->whereNotNull('start_time')
+                ->whereNotNull('end_time');
+            })
+            ->orderBy('first_name')
+            ->get();
 
         return view('admin.appointments.edit', compact('appointment', 'clients', 'services', 'staff'));
     }
@@ -179,10 +211,21 @@ class AppointmentController extends Controller
             'client_id' => 'nullable|exists:users,id',
             'service_id' => 'required|exists:services,id',
             'staff_id' => 'nullable|exists:users,id',
-            'appointment_date' => 'required|date',
+            'appointment_date' => ['required', 'date', function ($attribute, $value, $fail) {
+                $date = TimeHelper::parseDate($value);
+                $today = TimeHelper::today();
+                $maxDate = $today->copy()->addDays(30);
+                
+                if (!$date) {
+                    $fail('Invalid date format.');
+                } elseif ($date->lt($today)) {
+                    $fail('The appointment date must be today or a future date.');
+                } elseif ($date->gt($maxDate)) {
+                    $fail('You can only schedule an appointment within 30 days from today.');
+                }
+            }],
             'appointment_time' => 'required|date_format:H:i',
             'status' => 'required|in:pending,confirmed,in_progress,completed,cancelled,no_show',
-            'payment_status' => 'required|in:unpaid,partial,paid,refunded',
             'notes' => 'nullable|string|max:1000',
             'staff_notes' => 'nullable|string|max:1000',
             'is_walkin' => 'nullable|boolean',
@@ -203,6 +246,40 @@ class AppointmentController extends Controller
 
         $service = Service::findOrFail($request->service_id);
 
+        // Check if staff is being changed and if original staff has approved leave
+        $originalStaffId = $appointment->staff_id;
+        $newStaffId = $request->staff_id;
+        $staffChanged = $originalStaffId != $newStaffId && $originalStaffId && $newStaffId;
+        
+        $originalStaff = null;
+        $newStaff = null;
+        $hasApprovedLeave = false;
+        
+        if ($staffChanged) {
+            $originalStaff = User::find($originalStaffId);
+            $newStaff = User::find($newStaffId);
+            
+            // Check if original staff has an approved leave for this appointment date/time
+            if ($originalStaff) {
+                $hasApprovedLeave = \App\Models\StaffUnavailability::where('staff_id', $originalStaffId)
+                    ->where('unavailable_date', $request->appointment_date)
+                    ->where('approval_status', 'approved')
+                    ->where(function($query) use ($request) {
+                        // Check if leave is all-day or overlaps with appointment time
+                        $query->where(function($q) {
+                            $q->whereNull('start_time')
+                              ->whereNull('end_time');
+                        })->orWhere(function($q) use ($request) {
+                            $q->whereNotNull('start_time')
+                              ->whereNotNull('end_time')
+                              ->where('start_time', '<=', $request->appointment_time)
+                              ->where('end_time', '>=', $request->appointment_time);
+                        });
+                    })
+                    ->exists();
+            }
+        }
+
         // Prepare update data - preserve client/walk-in info from original appointment
         $updateData = [
             'service_id' => $request->service_id,
@@ -210,7 +287,6 @@ class AppointmentController extends Controller
             'appointment_date' => $request->appointment_date,
             'appointment_time' => $request->appointment_time,
             'status' => $request->status,
-            'payment_status' => $request->payment_status,
             'total_amount' => $service->price,
             'notes' => $request->notes,
             'staff_notes' => $request->staff_notes,
@@ -256,8 +332,119 @@ class AppointmentController extends Controller
 
         $appointment->update($updateData);
 
+        // If staff was changed and original staff has approved leave, send email to client
+        if ($staffChanged && $hasApprovedLeave && $originalStaff && $newStaff) {
+            try {
+                $this->sendStaffReplacementEmail($appointment, $originalStaff, $newStaff);
+            } catch (\Exception $e) {
+                Log::error('Failed to send staff replacement email', [
+                    'appointment_id' => $appointment->id,
+                    'error' => $e->getMessage(),
+                ]);
+                // Don't fail the update if email fails
+            }
+        }
+
         return redirect()->route('admin.appointments.index')
                         ->with('success', 'Appointment updated successfully.');
+    }
+
+    /**
+     * Send email to client about staff replacement due to leave.
+     */
+    private function sendStaffReplacementEmail(Appointment $appointment, User $originalStaff, User $newStaff): void
+    {
+        try {
+            // Get client email (registered client or walk-in)
+            $clientEmail = $appointment->customer_email;
+            $clientName = $appointment->customer_name;
+            
+            if (!$clientEmail) {
+                Log::warning('Cannot send staff replacement email: no email found', [
+                    'appointment_id' => $appointment->id,
+                    'client_id' => $appointment->client_id,
+                    'is_walkin' => $appointment->isWalkIn(),
+                ]);
+                return;
+            }
+
+            $phpMailerService = new PHPMailerService();
+
+            $originalStaffName = $originalStaff->first_name ? 
+                ($originalStaff->first_name . ' ' . $originalStaff->last_name) : 
+                $originalStaff->name;
+
+            $newStaffName = $newStaff->first_name ? 
+                ($newStaff->first_name . ' ' . $newStaff->last_name) : 
+                $newStaff->name;
+
+            $appointmentDate = $appointment->appointment_date instanceof Carbon 
+                ? $appointment->appointment_date->format('F d, Y')
+                : Carbon::parse($appointment->appointment_date)->format('F d, Y');
+
+            $appointmentTime = $appointment->appointment_time;
+            $timeCarbon = TimeHelper::parseTime($appointmentTime);
+            $formattedTime = $timeCarbon ? $timeCarbon->format('g:i A') : $appointmentTime;
+
+            $serviceName = $appointment->service ? $appointment->service->name : 'Service';
+
+            // Generate unique token for this appointment action
+            $token = bin2hex(random_bytes(32));
+            
+            // Store token in appointment notes
+            $appointment->update([
+                'notes' => ($appointment->notes ? $appointment->notes . "\n\n" : '') . 
+                          "Staff replacement token: {$token}",
+            ]);
+
+            $acceptUrl = route('appointments.emergency-staff.accept', [
+                'appointment' => $appointment->id,
+                'token' => $token,
+            ]);
+            
+            $cancelUrl = route('appointments.emergency-staff.cancel', [
+                'appointment' => $appointment->id,
+                'token' => $token,
+            ]);
+
+            $isWalkIn = $appointment->isWalkIn();
+
+            $emailSent = $phpMailerService->sendEmergencyStaffReplacementEmail(
+                $clientEmail,
+                $clientName,
+                $appointment->appointment_number ?? 'N/A',
+                $serviceName,
+                $appointmentDate,
+                $formattedTime,
+                $originalStaffName,
+                $newStaffName,
+                $acceptUrl,
+                $cancelUrl,
+                $isWalkIn
+            );
+
+            if ($emailSent) {
+                Log::info('Staff replacement email sent successfully', [
+                    'appointment_id' => $appointment->id,
+                    'client_email' => $clientEmail,
+                    'is_walkin' => $isWalkIn,
+                    'original_staff_id' => $originalStaff->id,
+                    'new_staff_id' => $newStaff->id,
+                ]);
+            } else {
+                Log::warning('Failed to send staff replacement email', [
+                    'appointment_id' => $appointment->id,
+                    'client_email' => $clientEmail,
+                    'is_walkin' => $isWalkIn,
+                ]);
+            }
+        } catch (\Throwable $exception) {
+            Log::error('Error sending staff replacement email', [
+                'appointment_id' => $appointment->id,
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
+        }
     }
 
     /**
