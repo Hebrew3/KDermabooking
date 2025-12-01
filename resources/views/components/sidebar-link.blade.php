@@ -12,7 +12,7 @@ $iconClasses = $active
 
 <a href="{{ $href }}" 
    {{ $attributes->merge(['class' => $classes]) }}
-   onclick="if(window.innerWidth < 1024) { const sidebar = document.getElementById('client-sidebar'); const overlay = document.getElementById('sidebar-overlay'); if(sidebar) sidebar.classList.add('-translate-x-full'); if(overlay) overlay.classList.add('hidden'); }">
+   onclick="if(window.innerWidth < 1024) { const sidebar = document.getElementById('staff-sidebar') || document.getElementById('admin-sidebar') || document.getElementById('client-sidebar'); const overlay = document.getElementById('sidebar-overlay'); if(sidebar) sidebar.classList.add('-translate-x-full'); if(overlay) overlay.classList.add('hidden'); }">
     <svg class="{{ $iconClasses }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         {{ $icon }}
     </svg>

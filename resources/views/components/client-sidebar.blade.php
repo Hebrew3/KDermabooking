@@ -2,7 +2,7 @@
 <div class="fixed inset-y-0 left-0 z-50 w-64 bg-white/95 backdrop-blur-sm shadow-pink-lg border-r border-pink-100 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out" id="client-sidebar">
     <div class="flex flex-col h-full overflow-hidden">
         <!-- Enhanced Logo Section -->
-        <div class="flex items-center justify-center h-20 px-4 bg-gradient-to-br from-pink-500 via-rose-500 to-pink-600 shadow-lg">
+        <div class="flex items-center justify-between h-20 px-4 bg-gradient-to-br from-pink-500 via-rose-500 to-pink-600 shadow-lg">
             <div class="flex items-center space-x-3">
                 <div class="h-12 w-12 bg-white/10 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/20 shadow-lg">
                     <img src="{{ asset('images/logo1.jpg') }}" alt="K-Derma Logo" class="h-10 w-10 rounded-lg object-cover">
@@ -12,6 +12,12 @@
                     <span class="text-pink-100 text-xs font-medium">Client Portal</span>
                 </div>
             </div>
+            <!-- Close Button (Mobile Only) -->
+            <button onclick="toggleSidebar()" class="lg:hidden p-2 text-white hover:bg-white/20 rounded-lg transition-colors duration-200">
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
         </div>
 
         <!-- Navigation Menu -->
