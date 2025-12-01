@@ -358,8 +358,18 @@ class DashboardController extends Controller
         // Get filter parameters from request
         $analyticsYear = request()->get('analytics_year', now()->year);
         $analyticsMonth = request()->get('analytics_month', null);
-        $productCategory = request()->get('product_category', 'all'); // all, aftercare, treatment
         $metricType = request()->get('metric_type', 'sales'); // sales, usage
+        // Auto-set category based on metric type: Sales = aftercare, Usage = treatment
+        $productCategory = request()->get('product_category');
+        if (!$productCategory || $productCategory === 'all') {
+            $productCategory = ($metricType === 'sales') ? 'aftercare' : 'treatment';
+        }
+        // Force correct category based on metric type
+        if ($metricType === 'sales') {
+            $productCategory = 'aftercare'; // Sales tab ONLY shows Aftercare Products
+        } else {
+            $productCategory = 'treatment'; // Usage tab ONLY shows Treatment Products
+        }
         $analyticsProductId = request()->get('analytics_product', null);
         
         // Convert year to integer, default to current year
@@ -422,12 +432,14 @@ class DashboardController extends Controller
             $analyticsPreviousEndDate
         );
         
-        // Get all products for filter dropdown based on category
+        // Get all products for filter dropdown based on metric type
+        // Sales tab: Only Aftercare Products
+        // Usage tab: Only Treatment Products
         $allAnalyticsProducts = InventoryItem::active()
-            ->when($productCategory === 'aftercare', function($query) {
+            ->when($metricType === 'sales', function($query) {
                 return $query->where('category', 'Aftercare Products');
             })
-            ->when($productCategory === 'treatment', function($query) {
+            ->when($metricType === 'usage', function($query) {
                 return $query->where('category', '!=', 'Aftercare Products');
             })
             ->orderBy('name')
@@ -1431,6 +1443,9 @@ class DashboardController extends Controller
 
     /**
      * Get unified analytics data (Sales or Usage)
+     * 
+     * Sales: ONLY Aftercare Products from POS (SaleItem)
+     * Usage: ONLY Treatment Products from Appointment Usage (InventoryUsageLog)
      */
     private function getUnifiedAnalyticsData(
         string $metricType,
@@ -1444,7 +1459,8 @@ class DashboardController extends Controller
         $data = [];
         
         if ($metricType === 'sales') {
-            // Sales metric: Get data from SaleItem (POS sales)
+            // SALES TAB: ONLY Aftercare Products from POS (SaleItem)
+            // Force category to 'aftercare' - ignore the passed category parameter
             // Check if date range is valid (start date should not be after end date)
             if ($startDate->gt($endDate)) {
                 // Invalid date range (e.g., future month), return empty data
@@ -1457,14 +1473,8 @@ class DashboardController extends Controller
                 ->join('inventory_items', 'sale_items.inventory_item_id', '=', 'inventory_items.id')
                 ->where('sales.status', 'completed')
                 ->where('inventory_items.is_active', true)
+                ->where('inventory_items.category', 'Aftercare Products') // ONLY Aftercare Products
                 ->whereBetween('sales.created_at', [$startDate, $endDate]);
-            
-            // Apply product category filter
-            if ($productCategory === 'aftercare') {
-                $selectedQuery->where('inventory_items.category', 'Aftercare Products');
-            } elseif ($productCategory === 'treatment') {
-                $selectedQuery->where('inventory_items.category', '!=', 'Aftercare Products');
-            }
             
             // Apply product filter if selected
             if ($productId) {
@@ -1485,13 +1495,8 @@ class DashboardController extends Controller
                     ->join('inventory_items', 'sale_items.inventory_item_id', '=', 'inventory_items.id')
                     ->where('sales.status', 'completed')
                     ->where('inventory_items.is_active', true)
+                    ->where('inventory_items.category', 'Aftercare Products') // ONLY Aftercare Products
                     ->whereBetween('sales.created_at', [$previousStartDate, $previousEndDate]);
-                
-                if ($productCategory === 'aftercare') {
-                    $previousQuery->where('inventory_items.category', 'Aftercare Products');
-                } elseif ($productCategory === 'treatment') {
-                    $previousQuery->where('inventory_items.category', '!=', 'Aftercare Products');
-                }
                 
                 if ($productId) {
                     $previousQuery->where('sale_items.inventory_item_id', $productId);
@@ -1512,14 +1517,16 @@ class DashboardController extends Controller
                 }
             }
         } else {
-            // Usage metric: Get data from InventoryUsageLog + SaleItem (combined)
+            // USAGE TAB: ONLY Treatment Products from Appointment Usage (InventoryUsageLog)
+            // Force category to 'treatment' - ignore the passed category parameter
+            // DO NOT include SaleItem data - only appointment usage
             // Check if date range is valid (start date should not be after end date)
             if ($startDate->gt($endDate)) {
                 // Invalid date range (e.g., future month), return empty data
                 return [];
             }
             
-            // Get usage logs data
+            // Get usage logs data ONLY (from appointments)
             $usageLogsQuery = InventoryUsageLog::select(
                     'inventory_usage_logs.inventory_item_id',
                     'inventory_usage_logs.item_name',
@@ -1532,14 +1539,8 @@ class DashboardController extends Controller
                 )
                 ->join('inventory_items', 'inventory_usage_logs.inventory_item_id', '=', 'inventory_items.id')
                 ->where('inventory_items.is_active', true)
+                ->where('inventory_items.category', '!=', 'Aftercare Products') // ONLY Treatment Products
                 ->whereBetween('inventory_usage_logs.created_at', [$startDate, $endDate]);
-            
-            // Apply product category filter
-            if ($productCategory === 'aftercare') {
-                $usageLogsQuery->where('inventory_items.category', 'Aftercare Products');
-            } elseif ($productCategory === 'treatment') {
-                $usageLogsQuery->where('inventory_items.category', '!=', 'Aftercare Products');
-            }
             
             // Apply product filter if selected
             if ($productId) {
@@ -1548,75 +1549,17 @@ class DashboardController extends Controller
             
             $usageLogs = $usageLogsQuery
                 ->groupBy('inventory_usage_logs.inventory_item_id', 'inventory_usage_logs.item_name', 'inventory_usage_logs.item_sku')
+                ->orderBy('total_usage', 'desc')
+                ->limit(10)
                 ->get();
             
-            // Get sales data (for treatment products, sales also count as usage)
-            $salesQuery = SaleItem::select(
-                    'sale_items.inventory_item_id',
-                    'sale_items.item_name',
-                    'sale_items.item_sku',
-                    DB::raw('SUM(sale_items.quantity) as total_sold'),
-                    DB::raw('COUNT(*) as sale_count')
-                )
-                ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
-                ->join('inventory_items', 'sale_items.inventory_item_id', '=', 'inventory_items.id')
-                ->where('sales.status', 'completed')
-                ->where('inventory_items.is_active', true)
-                ->whereBetween('sales.created_at', [$startDate, $endDate]);
-            
-            // Apply product category filter
-            if ($productCategory === 'aftercare') {
-                $salesQuery->where('inventory_items.category', 'Aftercare Products');
-            } elseif ($productCategory === 'treatment') {
-                $salesQuery->where('inventory_items.category', '!=', 'Aftercare Products');
-            }
-            
-            // Apply product filter if selected
-            if ($productId) {
-                $salesQuery->where('sale_items.inventory_item_id', $productId);
-            }
-            
-            $sales = $salesQuery
-                ->groupBy('sale_items.inventory_item_id', 'sale_items.item_name', 'sale_items.item_sku')
-                ->get();
-            
-            // Combine usage logs and sales data
-            $combinedData = [];
-            
-            // Process usage logs
+            // Process usage logs data (NO sales data included)
             foreach ($usageLogs as $item) {
-                $key = $item->inventory_item_id;
-                $combinedData[$key] = [
+                $data[] = [
                     'name' => $item->item_name,
                     'total_usage' => (float)$item->total_usage,
                     'usage_count' => (int)$item->usage_count,
                 ];
-            }
-            
-            // Process sales and merge with usage logs
-            foreach ($sales as $item) {
-                $key = $item->inventory_item_id;
-                if (isset($combinedData[$key])) {
-                    // Merge sales data with existing usage data
-                    $combinedData[$key]['total_usage'] += (float)$item->total_sold;
-                    $combinedData[$key]['usage_count'] += (int)$item->sale_count;
-                } else {
-                    // Add new entry for products only sold
-                    $combinedData[$key] = [
-                        'name' => $item->item_name,
-                        'total_usage' => (float)$item->total_sold,
-                        'usage_count' => (int)$item->sale_count,
-                    ];
-                }
-            }
-            
-            // Sort by total_usage and limit to top 10
-            usort($combinedData, function($a, $b) {
-                return $b['total_usage'] <=> $a['total_usage'];
-            });
-            
-            if (count($combinedData) > 0) {
-                $data = array_slice($combinedData, 0, 10);
             }
         }
         
@@ -1630,9 +1573,11 @@ class DashboardController extends Controller
     {
         $year = (int) $request->get('analytics_year', now()->year);
         $month = $request->get('analytics_month');
-        $productCategory = $request->get('product_category', 'all');
         $metricType = $request->get('metric_type', 'sales');
         $productId = $request->get('analytics_product');
+        
+        // Auto-set category based on metric type: Sales = aftercare, Usage = treatment
+        $productCategory = ($metricType === 'sales') ? 'aftercare' : 'treatment';
         
         // Convert month to integer if valid
         $monthInt = null;
@@ -1664,7 +1609,7 @@ class DashboardController extends Controller
             $periodLabel = $year;
         }
         
-        // Get data using unified method
+        // Get data using unified method (category is auto-set based on metric type)
         $data = $this->getUnifiedAnalyticsData(
             $metricType,
             $productCategory,
@@ -1676,7 +1621,7 @@ class DashboardController extends Controller
         );
         
         // Generate filename
-        $categoryLabel = $productCategory === 'aftercare' ? 'Aftercare' : ($productCategory === 'treatment' ? 'Treatment' : 'All');
+        $categoryLabel = $productCategory === 'aftercare' ? 'Aftercare' : 'Treatment';
         $metricLabel = $metricType === 'sales' ? 'Sales' : 'Usage';
         $filename = "product-analytics-{$metricLabel}-{$categoryLabel}-{$periodLabel}.csv";
         

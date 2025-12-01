@@ -58,8 +58,10 @@ class ServiceController extends Controller
         $staff = auth()->user();
 
         // Get appointments for this service with this staff
+        // Only include appointments that have a valid client
         $appointments = Appointment::where('service_id', $service->id)
             ->where('staff_id', $staff->id)
+            ->whereHas('client') // Only appointments with valid clients
             ->with('client')
             ->orderBy('appointment_date', 'desc')
             ->orderBy('appointment_time', 'desc')

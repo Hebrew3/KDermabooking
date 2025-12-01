@@ -253,10 +253,10 @@
                                 <option value="{{ $m }}" {{ ($analyticsMonth ?? null) == $m ? 'selected' : '' }}>{{ date('F', mktime(0, 0, 0, $m, 1)) }}</option>
                             @endfor
                         </select>
-                        <select id="productCategoryFilter" class="bg-white border-2 border-gray-300 rounded-lg px-4 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all duration-200">
-                            <option value="all" {{ ($productCategory ?? 'all') === 'all' ? 'selected' : '' }}>All Products</option>
-                            <option value="aftercare" {{ ($productCategory ?? 'all') === 'aftercare' ? 'selected' : '' }}>Aftercare Products</option>
-                            <option value="treatment" {{ ($productCategory ?? 'all') === 'treatment' ? 'selected' : '' }}>Treatment Products</option>
+                        <!-- Category filter is auto-set based on metric type (hidden) -->
+                        <select id="productCategoryFilter" class="hidden">
+                            <option value="aftercare" {{ ($metricType ?? 'sales') === 'sales' ? 'selected' : '' }}>Aftercare Products</option>
+                            <option value="treatment" {{ ($metricType ?? 'sales') === 'usage' ? 'selected' : '' }}>Treatment Products</option>
                         </select>
                         <select id="analyticsProductFilter" class="bg-white border-2 border-gray-300 rounded-lg px-4 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all duration-200 min-w-[200px]">
                             <option value="">All Products</option>
@@ -1118,9 +1118,16 @@
     function updateUnifiedAnalytics() {
         const year = analyticsYearFilter?.value || new Date().getFullYear();
         const month = analyticsMonthFilter?.value || '';
-        const category = productCategoryFilter?.value || 'all';
         const product = analyticsProductFilter?.value || '';
         const metricType = metricTypeSales?.classList.contains('bg-indigo-500') ? 'sales' : 'usage';
+        
+        // Auto-set category based on metric type
+        const category = (metricType === 'sales') ? 'aftercare' : 'treatment';
+        
+        // Update hidden category filter
+        if (productCategoryFilter) {
+            productCategoryFilter.value = category;
+        }
         
         // Build params
         const params = new URLSearchParams();
@@ -1152,9 +1159,7 @@
         analyticsMonthFilter.addEventListener('change', updateUnifiedAnalytics);
     }
     
-    if (productCategoryFilter) {
-        productCategoryFilter.addEventListener('change', updateUnifiedAnalytics);
-    }
+    // Category filter is auto-set, no need for change listener
     
     if (analyticsProductFilter) {
         analyticsProductFilter.addEventListener('change', updateUnifiedAnalytics);
@@ -1166,6 +1171,10 @@
             metricTypeSales.classList.remove('text-gray-700');
             metricTypeUsage.classList.remove('bg-indigo-500', 'text-white');
             metricTypeUsage.classList.add('text-gray-700');
+            // Auto-set category to 'aftercare' for Sales tab
+            if (productCategoryFilter) {
+                productCategoryFilter.value = 'aftercare';
+            }
             updateUnifiedAnalytics();
         });
     }
@@ -1176,6 +1185,10 @@
             metricTypeUsage.classList.remove('text-gray-700');
             metricTypeSales.classList.remove('bg-indigo-500', 'text-white');
             metricTypeSales.classList.add('text-gray-700');
+            // Auto-set category to 'treatment' for Usage tab
+            if (productCategoryFilter) {
+                productCategoryFilter.value = 'treatment';
+            }
             updateUnifiedAnalytics();
         });
     }

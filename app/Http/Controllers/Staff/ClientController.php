@@ -16,7 +16,11 @@ class ClientController extends Controller
     {
         $staff = $request->user();
 
+        // Only get clients who have at least one appointment with this staff member
         $query = User::where('role', 'client')
+            ->whereHas('appointments', function($query) use ($staff) {
+                $query->where('staff_id', $staff->id);
+            })
             ->withCount(['appointments as total_appointments' => function($query) use ($staff) {
                 $query->where('staff_id', $staff->id);
             }])
@@ -54,6 +58,15 @@ class ClientController extends Controller
     public function show(User $client)
     {
         $staff = auth()->user();
+
+        // Verify that this client has appointments with this staff member
+        $hasAppointments = Appointment::where('client_id', $client->id)
+            ->where('staff_id', $staff->id)
+            ->exists();
+
+        if (!$hasAppointments) {
+            abort(403, 'You do not have access to this client.');
+        }
 
         // Get client's appointments with this staff
         $appointments = Appointment::where('client_id', $client->id)

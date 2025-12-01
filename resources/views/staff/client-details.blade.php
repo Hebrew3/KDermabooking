@@ -154,11 +154,6 @@
                                         <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium {{ $appointment->status_color }}">
                                             {{ ucfirst(str_replace('_', ' ', $appointment->status)) }}
                                         </span>
-                                        @if($appointment->payment_status)
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium {{ $appointment->payment_status_color }}">
-                                            Payment: {{ ucfirst($appointment->payment_status) }}
-                                        </span>
-                                        @endif
                                         @if($appointment->client_rating)
                                         <div class="flex items-center text-yellow-500">
                                             @for($i = 1; $i <= 5; $i++)

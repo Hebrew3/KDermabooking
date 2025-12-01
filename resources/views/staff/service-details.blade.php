@@ -72,13 +72,23 @@
                                 <tr class="hover:bg-gray-50">
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="flex items-center">
-                                            <div class="h-10 w-10 bg-gradient-to-br from-pink-400 to-rose-400 rounded-full flex items-center justify-center">
-                                                <span class="text-white font-medium text-sm">{{ substr($appointment->client->name, 0, 2) }}</span>
-                                            </div>
-                                            <div class="ml-4">
-                                                <div class="text-sm font-medium text-gray-900">{{ $appointment->client->name }}</div>
-                                                <div class="text-sm text-gray-500">{{ $appointment->client->email }}</div>
-                                            </div>
+                                            @if($appointment->client)
+                                                <div class="h-10 w-10 bg-gradient-to-br from-pink-400 to-rose-400 rounded-full flex items-center justify-center">
+                                                    <span class="text-white font-medium text-sm">{{ substr($appointment->client->name ?? 'N/A', 0, 2) }}</span>
+                                                </div>
+                                                <div class="ml-4">
+                                                    <div class="text-sm font-medium text-gray-900">{{ $appointment->client->name ?? 'Unknown Client' }}</div>
+                                                    <div class="text-sm text-gray-500">{{ $appointment->client->email ?? 'N/A' }}</div>
+                                                </div>
+                                            @else
+                                                <div class="h-10 w-10 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center">
+                                                    <span class="text-white font-medium text-sm">N/A</span>
+                                                </div>
+                                                <div class="ml-4">
+                                                    <div class="text-sm font-medium text-gray-900">Unknown Client</div>
+                                                    <div class="text-sm text-gray-500">Client information not available</div>
+                                                </div>
+                                            @endif
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
