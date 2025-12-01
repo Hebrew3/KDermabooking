@@ -19,6 +19,25 @@ class RoleBasedLoginController extends Controller
             'password' => 'required',
         ]);
 
+        // Verify reCAPTCHA if enabled
+        if (config('services.recaptcha.site_key') && config('services.recaptcha.secret_key')) {
+            $recaptchaResponse = $request->input('g-recaptcha-response');
+            
+            if (!$recaptchaResponse) {
+                throw ValidationException::withMessages([
+                    'g-recaptcha-response' => 'Please complete the reCAPTCHA verification.',
+                ]);
+            }
+
+            $verifyResponse = $this->verifyRecaptcha($recaptchaResponse, $request->ip());
+            
+            if (!$verifyResponse['success']) {
+                throw ValidationException::withMessages([
+                    'g-recaptcha-response' => 'reCAPTCHA verification failed. Please try again.',
+                ]);
+            }
+        }
+
         if (Auth::attempt($request->only('email', 'password'), $request->boolean('remember'))) {
             $request->session()->regenerate();
 
@@ -29,6 +48,45 @@ class RoleBasedLoginController extends Controller
         throw ValidationException::withMessages([
             'email' => trans('auth.failed'),
         ]);
+    }
+
+    /**
+     * Verify reCAPTCHA response with Google
+     */
+    protected function verifyRecaptcha($response, $remoteIp = null)
+    {
+        $secretKey = config('services.recaptcha.secret_key');
+        
+        if (!$secretKey) {
+            return ['success' => false];
+        }
+
+        $url = 'https://www.google.com/recaptcha/api/siteverify';
+        $data = [
+            'secret' => $secretKey,
+            'response' => $response,
+        ];
+
+        if ($remoteIp) {
+            $data['remoteip'] = $remoteIp;
+        }
+
+        $options = [
+            'http' => [
+                'header' => "Content-type: application/x-www-form-urlencoded\r\n",
+                'method' => 'POST',
+                'content' => http_build_query($data),
+            ],
+        ];
+
+        $context = stream_context_create($options);
+        $result = file_get_contents($url, false, $context);
+        
+        if ($result === false) {
+            return ['success' => false];
+        }
+
+        return json_decode($result, true);
     }
 
     /**
